@@ -2,6 +2,9 @@
   <Folder Name="/src/">
     <Project Path="src/KiaraFin.Api/KiaraFin.Api.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/KiaraFin.Api.Tests/KiaraFin.Api.Tests.csproj" />
+  </Folder>
   <Project Path="../frontend/KiaraFin.Frontend.esproj">
     <Build />
     <Deploy />

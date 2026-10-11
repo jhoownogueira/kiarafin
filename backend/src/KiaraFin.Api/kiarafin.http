@@ -1,0 +1,6 @@
+@kiarafin_HostAddress = http://localhost:5134
+
+GET {{kiarafin_HostAddress}}/health
+Accept: application/json
+
+###
