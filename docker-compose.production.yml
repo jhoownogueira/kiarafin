@@ -1,0 +1,102 @@
+name: kiarafin
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kiarafin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-kiarafin}
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    shm_size: 128mb
+    networks:
+      - internal
+
+  migrate:
+    image: kiarafin-api:local
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["--migrate"]
+    restart: "no"
+    environment: &api-environment
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-kiarafin};Username=${POSTGRES_USER:-kiarafin};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      Jwt__Issuer: KiaraFin.Api
+      Jwt__Audience: KiaraFin.Frontend
+      Jwt__Key: ${JWT_KEY:?JWT_KEY is required}
+      Jwt__AccessTokenMinutes: 15
+      Jwt__RefreshTokenDays: 30
+      Cors__AllowedOrigins__0: ${PUBLIC_ORIGIN:?PUBLIC_ORIGIN is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  api:
+    image: kiarafin-api:local
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment: *api-environment
+    ports:
+      - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-3334}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - internal
+
+  frontend:
+    image: kiarafin-frontend:local
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: http://api:8080
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${FRONTEND_BIND_ADDRESS:-0.0.0.0}:${FRONTEND_PORT:-3333}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - internal
+
+volumes:
+  postgres-data:
+    name: ${POSTGRES_VOLUME_NAME:-kiarafin-postgres-production-data}
+
+networks:
+  internal:
+    name: ${NETWORK_NAME:-kiarafin-internal}

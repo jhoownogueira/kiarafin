@@ -1,0 +1,111 @@
+name: KiaraFin CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kiarafin-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Build and test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: kiarafin
+          POSTGRES_PASSWORD: integration-test-only
+          POSTGRES_DB: test-kiarafin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kiarafin -d test-kiarafin"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      KIARAFIN_TEST_CONNECTION: Host=localhost;Port=5432;Database=test-kiarafin;Username=kiarafin;Password=integration-test-only
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore backend
+        run: dotnet restore backend/tests/KiaraFin.Api.Tests/KiaraFin.Api.Tests.csproj
+
+      - name: Build backend
+        run: dotnet build backend/tests/KiaraFin.Api.Tests/KiaraFin.Api.Tests.csproj --configuration Release --no-restore -p:UseAppHost=false
+
+      - name: Test backend
+        run: dotnet test backend/tests/KiaraFin.Api.Tests/KiaraFin.Api.Tests.csproj --configuration Release --no-build --no-restore -p:UseAppHost=false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  deploy:
+    name: Deploy production
+    needs: ci
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, kiarafin-production]
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - name: Checkout approved revision
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate deployment configuration
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_KEY: ${{ secrets.JWT_KEY }}
+          PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN }}
+        run: |
+          test -n "$POSTGRES_PASSWORD"
+          test "${#JWT_KEY}" -ge 32
+          case "$PUBLIC_ORIGIN" in https://*) ;; *) echo "PUBLIC_ORIGIN must use HTTPS"; exit 1 ;; esac
+          docker compose version
+
+      - name: Build, migrate and deploy
+        env:
+          POSTGRES_USER: kiarafin
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: kiarafin
+          JWT_KEY: ${{ secrets.JWT_KEY }}
+          PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN }}
+          FRONTEND_BIND_ADDRESS: 0.0.0.0
+          BACKEND_BIND_ADDRESS: 127.0.0.1
+        run: docker compose -f docker-compose.production.yml up --detach --build --remove-orphans --wait
+
+      - name: Verify deployment
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:3334/health
+          curl --fail --silent --show-error http://127.0.0.1:3333/ >/dev/null

@@ -19,6 +19,9 @@ Consulte [Arquitetura](docs/architecture.md) e
 [Regras financeiras](docs/financial-rules.md) antes de alterar os módulos de
 domínio.
 
+Para publicar em Ubuntu com Docker, GitHub Actions e Nginx Proxy Manager,
+consulte [Deploy no Ubuntu](docs/deployment-ubuntu.md).
+
 ## Pré-requisitos
 
 - .NET SDK 10.
@@ -136,6 +139,21 @@ contenha `test`:
 $env:KIARAFIN_TEST_CONNECTION = "Host=localhost;Port=5432;Database=test-kiarafin;Username=<usuario>;Password=<senha>"
 dotnet test backend/KiaraFin.slnx
 ```
+
+## Produção
+
+O Compose de produção publica o frontend em `3333`, mantém a API em `3334` e
+executa as migrations explicitamente antes de iniciar a API:
+
+```bash
+docker compose --env-file .env.production \
+  -f docker-compose.production.yml up -d --build
+```
+
+O arquivo `.env.production` não deve ser versionado. Use
+`.env.production.example` apenas como modelo. O pipeline em
+`.github/workflows/ci-cd.yml` recebe os segredos pelo environment `production`
+do GitHub e faz deploy por um runner self-hosted no Ubuntu.
 
 ## Endpoints principais
 

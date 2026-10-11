@@ -1,10 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
   async rewrites() {
-    return [{ source: "/api/:path*", destination: "http://localhost:5134/api/:path*" }];
+    const apiTarget = process.env.API_PROXY_TARGET ?? "http://localhost:5134";
+    return [{ source: "/api/:path*", destination: `${apiTarget}/api/:path*` }];
   },
   turbopack: {
     rules: {

@@ -98,6 +98,14 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
 
+if (args.Contains("--migrate", StringComparer.OrdinalIgnoreCase))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await dbContext.Database.MigrateAsync();
+    return;
+}
+
 app.Run();
 
 public partial class Program;
