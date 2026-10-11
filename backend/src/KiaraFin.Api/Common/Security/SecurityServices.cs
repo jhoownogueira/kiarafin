@@ -5,6 +5,7 @@ using System.Text;
 using KiaraFin.Api.Common.Exceptions;
 using KiaraFin.Api.Features.Identity;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -77,13 +78,34 @@ public sealed class TokenService(IOptions<JwtOptions> options) : ITokenService
     }
 
     public string CreateOpaqueToken() =>
-        Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(64));
 
     public string HashOpaqueToken(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
     public DateTime GetRefreshExpirationUtc() =>
         DateTime.UtcNow.AddDays(_options.RefreshTokenDays);
+}
+
+public static class OpaqueToken
+{
+    public static string NormalizeTransportEncoding(string token)
+    {
+        var normalized = token.Trim();
+
+        // Convites antigos usavam Base64 comum e podiam atravessar mais de um
+        // redirecionamento com os caracteres reservados codificados novamente.
+        for (var attempt = 0; attempt < 3 && normalized.Contains('%'); attempt++)
+        {
+            var decoded = Uri.UnescapeDataString(normalized);
+            if (decoded == normalized)
+                break;
+
+            normalized = decoded;
+        }
+
+        return normalized;
+    }
 }
 
 public interface IRequestOriginValidator

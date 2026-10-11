@@ -16,16 +16,33 @@ import { authQueryKey, authService } from "@/features/auth/auth-service"
 import { householdService } from "@/features/households/household-service"
 import { getApiErrorMessage } from "@/lib/api/errors"
 
+function normalizeInvitationToken(token: string) {
+  let normalized = token.trim()
+
+  for (let attempt = 0; attempt < 3 && normalized.includes("%"); attempt += 1) {
+    try {
+      const decoded = decodeURIComponent(normalized)
+      if (decoded === normalized) break
+      normalized = decoded
+    } catch {
+      break
+    }
+  }
+
+  return normalized
+}
+
 export function AcceptInvitation({ token }: { token: string }) {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const normalizedToken = normalizeInvitationToken(token)
   const session = useQuery({ queryKey: authQueryKey, queryFn: authService.me, retry: false })
   const unauthorized = axios.isAxiosError(session.error) && session.error.response?.status === 401
-  const returnTo = `/convite/${encodeURIComponent(token)}`
+  const returnTo = `/convite/${encodeURIComponent(normalizedToken)}`
   const loginHref = `/login?returnTo=${encodeURIComponent(returnTo)}`
   const registerHref = `/cadastro?returnTo=${encodeURIComponent(returnTo)}`
   const accept = useMutation({
-    mutationFn: () => householdService.acceptInvitation(token),
+    mutationFn: () => householdService.acceptInvitation(normalizedToken),
     onSuccess: async (household) => {
       await queryClient.invalidateQueries({ queryKey: authQueryKey })
       toast.success(`Agora você faz parte de ${household.name}.`)
@@ -41,7 +58,7 @@ export function AcceptInvitation({ token }: { token: string }) {
         <Card>
           <CardHeader className="text-center"><span className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-accent text-accent-foreground"><Users className="size-7" /></span><CardTitle className="text-2xl">Convite para compartilhar finanças</CardTitle><CardDescription>Entre no núcleo financeiro de alguém próximo e acompanhem tudo no mesmo espaço.</CardDescription></CardHeader>
           <CardContent>
-            {token.length < 40 ? (
+            {normalizedToken.length < 40 ? (
               <div className="rounded-xl bg-destructive/10 p-4 text-center text-sm text-destructive">Este link de convite é inválido.</div>
             ) : session.isPending ? (
               <div className="space-y-3"><Skeleton className="h-12 w-full" /><Skeleton className="mx-auto h-4 w-3/4" /></div>

@@ -5,6 +5,7 @@ using KiaraFin.Api.Features.Auth;
 using KiaraFin.Api.Features.Households;
 using KiaraFin.Api.Features.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -21,9 +22,21 @@ public sealed class IdentityFoundationTests
         var second = service.CreateOpaqueToken();
 
         Assert.NotEqual(first, second);
-        Assert.Equal(64, Convert.FromBase64String(first).Length);
+        Assert.Equal(64, WebEncoders.Base64UrlDecode(first).Length);
+        Assert.DoesNotContain('/', first);
+        Assert.DoesNotContain('+', first);
+        Assert.DoesNotContain('=', first);
         Assert.Equal(service.HashOpaqueToken(first), service.HashOpaqueToken(first));
         Assert.DoesNotContain(first, service.HashOpaqueToken(first), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("abc/def+ghi==", "abc/def+ghi==")]
+    [InlineData("abc%2Fdef%2Bghi%3D%3D", "abc/def+ghi==")]
+    [InlineData("abc%252Fdef%252Bghi%253D%253D", "abc/def+ghi==")]
+    public void Legacy_invitation_tokens_are_normalized_after_redirects(string transported, string expected)
+    {
+        Assert.Equal(expected, OpaqueToken.NormalizeTransportEncoding(transported));
     }
 
     [Fact]

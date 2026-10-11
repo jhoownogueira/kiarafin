@@ -50,7 +50,8 @@ public sealed class HouseholdService(
         await using var transaction = await dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
-        var tokenHash = tokenService.HashOpaqueToken(request.Token);
+        var normalizedToken = OpaqueToken.NormalizeTransportEncoding(request.Token);
+        var tokenHash = tokenService.HashOpaqueToken(normalizedToken);
         var invitation = await dbContext.HouseholdInvitations
             .Include(x => x.Household)
             .SingleOrDefaultAsync(x => x.TokenHash == tokenHash, cancellationToken)
