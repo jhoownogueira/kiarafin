@@ -1,0 +1,23 @@
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: kiarafin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kiarafin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: dev-kiarafin
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - kiarafin-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kiarafin -d dev-kiarafin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  kiarafin-postgres-data:
