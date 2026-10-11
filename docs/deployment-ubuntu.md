@@ -12,12 +12,14 @@ Nginx Proxy Manager (HTTPS)
 Ubuntu:3333 -> frontend:3000 -> /api -> api:8080
                                       |
 Ubuntu:3334 -> api:8080               v
-                                postgres:5432
+                             postgres:5432 (rede Docker)
 ```
 
 O Nginx Proxy Manager precisa publicar apenas o frontend. O frontend encaminha
 `/api` para a API pela rede interna do Compose. A porta `3334` fica vinculada a
-`127.0.0.1` por padrão para diagnóstico local e não precisa ser pública.
+`127.0.0.1` por padrão para diagnóstico local e não precisa ser pública. O
+PostgreSQL não publica porta no host; somente os containers da rede interna
+conseguem acessá-lo em `postgres:5432`.
 
 O refresh token usa cookie `Secure` em produção. Portanto, acesse a aplicação
 pelo domínio HTTPS configurado no Nginx Proxy Manager, não diretamente por HTTP
@@ -204,8 +206,8 @@ Na aba SSL, solicite ou selecione o certificado, habilite **Force SSL** e
 **HTTP/2 Support**. Não é necessário criar uma regra separada para `/api`.
 
 Se o NPM estiver na mesma máquina, use o IP LAN/VPN do Ubuntu. Garanta que o
-firewall permita `3333/tcp` somente a partir da rede Docker/NPM ou da VPN. Não
-publique `5432/tcp` na rede; o Compose o vincula somente ao loopback.
+firewall permita `3333/tcp` somente a partir da rede Docker/NPM ou da VPN. O
+PostgreSQL não possui porta publicada pelo Compose de produção.
 
 ## 6. Funcionamento do pipeline
 
