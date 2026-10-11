@@ -152,8 +152,8 @@ docker compose --env-file .env.production \
 
 O arquivo `.env.production` não deve ser versionado. Use
 `.env.production.example` apenas como modelo. O pipeline em
-`.github/workflows/ci-cd.yml` recebe os segredos pelo environment `production`
-do GitHub e faz deploy por um runner self-hosted no Ubuntu.
+`.github/workflows/ci-cd.yml` recebe os segredos pelos Repository secrets do
+GitHub e faz deploy por um runner self-hosted no Ubuntu.
 
 ## Endpoints principais
 

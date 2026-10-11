@@ -75,7 +75,6 @@ jobs:
     needs: ci
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, x64, kiarafin-production]
-    environment: production
     timeout-minutes: 30
     steps:
       - name: Checkout approved revision
@@ -89,9 +88,21 @@ jobs:
           JWT_KEY: ${{ secrets.JWT_KEY }}
           PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN }}
         run: |
-          test -n "$POSTGRES_PASSWORD"
-          test "${#JWT_KEY}" -ge 32
-          case "$PUBLIC_ORIGIN" in https://*) ;; *) echo "PUBLIC_ORIGIN must use HTTPS"; exit 1 ;; esac
+          if [ -z "$POSTGRES_PASSWORD" ]; then
+            echo "::error::Repository secret POSTGRES_PASSWORD is missing"
+            exit 1
+          fi
+          if [ "${#JWT_KEY}" -lt 32 ]; then
+            echo "::error::Repository secret JWT_KEY must have at least 32 characters"
+            exit 1
+          fi
+          case "$PUBLIC_ORIGIN" in
+            https://*) ;;
+            *)
+              echo "::error::Repository secret PUBLIC_ORIGIN must be the full HTTPS URL, for example https://financas.example.com"
+              exit 1
+              ;;
+          esac
           docker compose version
 
       - name: Build, migrate and deploy

@@ -81,15 +81,15 @@ Use esse runner apenas para este repositório confiável. Pull requests executam
 somente o job de CI hospedado pelo GitHub; o job no servidor roda apenas para
 `main` ou por disparo manual.
 
-## 3. Secrets do GitHub
+## 3. Repository secrets do GitHub
 
-Crie o environment `production` em:
+Abra:
 
 ```text
-Settings > Environments > New environment
+Settings > Secrets and variables > Actions > New repository secret
 ```
 
-Adicione estes environment secrets:
+Adicione estes repository secrets:
 
 | Secret | Conteúdo |
 | --- | --- |
@@ -105,8 +105,7 @@ openssl rand -base64 48 | tr -d '\n'
 ```
 
 Use um valor para a senha e outro para a chave JWT. Não salve esses valores no
-repositório. Opcionalmente, configure aprovação obrigatória no environment
-`production` antes do deploy.
+repositório.
 
 ## 4. Primeira inicialização manual do PostgreSQL
 
@@ -234,4 +233,4 @@ docker compose -f docker-compose.production.yml logs --tail=200 postgres
 ```
 
 Para comandos manuais, use `--env-file .env.production`. No GitHub Actions, as
-variáveis são fornecidas diretamente pelos secrets do environment.
+variáveis são fornecidas diretamente pelos repository secrets.
