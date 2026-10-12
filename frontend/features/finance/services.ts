@@ -27,7 +27,15 @@ export const categoryService = {
 
 export const transactionService = {
   async list(householdId: string, filters: TransactionFilters) { const { data } = await api.get<PagedResponse<Transaction>>(`${root(householdId)}/transactions`, { params: { ...filters, status: filters.status || undefined, pageSize: 20 } }); return data },
-  async create(householdId: string, input: TransactionInput) { const { data } = await api.post<Transaction>(`${root(householdId)}/transactions`, input); return data },
+  async create(householdId: string, input: TransactionInput) {
+    const payload = {
+      ...input,
+      settledDate: input.settledDate || null,
+      notes: input.notes || null,
+    }
+    const { data } = await api.post<Transaction>(`${root(householdId)}/transactions`, payload)
+    return data
+  },
   async update(householdId: string, id: string, input: TransactionInput) { const update = { description: input.description, amount: input.amount, categoryId: input.categoryId, accountId: input.accountId, competenceDate: input.competenceDate, dueDate: input.dueDate, notes: input.notes, responsibleUserId: input.responsibleUserId, scope: input.scope }; const { data } = await api.put<Transaction>(`${root(householdId)}/transactions/${id}`, update); return data },
   async settle(householdId: string, id: string, settledDate: string) { const { data } = await api.post<Transaction>(`${root(householdId)}/transactions/${id}/settle`, { settledDate }); return data },
   async cancel(householdId: string, id: string) { const { data } = await api.post<Transaction>(`${root(householdId)}/transactions/${id}/cancel`); return data },
