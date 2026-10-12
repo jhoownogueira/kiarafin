@@ -42,6 +42,22 @@ public sealed class CreditCardsController(CreditCardService service) : Controlle
         Guid householdId, Guid id, CreditCardPurchaseRequest request, CancellationToken ct) =>
         Ok(await service.CreatePurchaseAsync(householdId, id, request, ct));
 
+    [HttpPut("{id:guid}/purchases/{purchaseId:guid}")]
+    public async Task<IActionResult> UpdatePurchase(
+        Guid householdId, Guid id, Guid purchaseId, UpdateCreditCardPurchaseRequest request, CancellationToken ct)
+    {
+        await service.UpdatePurchaseAsync(householdId, id, purchaseId, request, ct);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}/purchases/{purchaseId:guid}")]
+    public async Task<IActionResult> DeletePurchase(
+        Guid householdId, Guid id, Guid purchaseId, CancellationToken ct)
+    {
+        await service.DeletePurchaseAsync(householdId, id, purchaseId, ct);
+        return NoContent();
+    }
+
     [HttpGet("{id:guid}/invoices")]
     public async Task<ActionResult<IReadOnlyList<InvoiceSummaryResponse>>> Invoices(
         Guid householdId, Guid id, CancellationToken ct) =>
@@ -51,6 +67,11 @@ public sealed class CreditCardsController(CreditCardService service) : Controlle
     public async Task<ActionResult<InvoiceDetailResponse>> Invoice(
         Guid householdId, Guid id, Guid invoiceId, CancellationToken ct) =>
         Ok(await service.GetInvoiceAsync(householdId, id, invoiceId, ct));
+
+    [HttpPost("{id:guid}/invoices/{invoiceId:guid}/close")]
+    public async Task<ActionResult<InvoiceDetailResponse>> CloseInvoice(
+        Guid householdId, Guid id, Guid invoiceId, CloseInvoiceRequest request, CancellationToken ct) =>
+        Ok(await service.CloseInvoiceAsync(householdId, id, invoiceId, request, ct));
 
     [HttpPost("{id:guid}/invoices/{invoiceId:guid}/pay")]
     public async Task<ActionResult<InvoicePaymentResponse>> PayInvoice(

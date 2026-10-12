@@ -360,6 +360,34 @@ public sealed class FinancialTransaction
         InstallmentCount = count;
     }
 
+    public void UpdatePendingCreditCardPurchase(
+        string description,
+        decimal amount,
+        Guid categoryId,
+        Guid responsibleUserId,
+        ExpenseScope scope,
+        DateTime utcNow)
+    {
+        if (Status != FinancialTransactionStatus.Pending || CreditCardId is null || InvoiceId is null)
+            throw new ConflictException("Somente compras pendentes do cartão podem ser editadas.");
+        FinanceGuard.NotEmpty(categoryId, nameof(categoryId));
+        FinanceGuard.NotEmpty(responsibleUserId, nameof(responsibleUserId));
+        Description = FinanceGuard.RequiredText(description, nameof(description));
+        Amount = FinanceGuard.PositiveMoney(amount, nameof(amount));
+        CategoryId = categoryId;
+        ResponsibleUserId = responsibleUserId;
+        Scope = scope;
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
+
+    public void UpdateInvoiceDueDate(DateOnly dueDate, DateTime utcNow)
+    {
+        if (Status != FinancialTransactionStatus.Pending || InvoiceId is null)
+            throw new ConflictException("Somente compras pendentes podem acompanhar o vencimento da fatura.");
+        DueDate = dueDate;
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
+
     public void Settle(DateOnly settledDate, DateTime utcNow)
     {
         if (Status == FinancialTransactionStatus.Canceled)
@@ -680,15 +708,25 @@ public sealed class Invoice
 
     public void ReplaceCalculatedTotal(decimal totalAmount, DateTime utcNow)
     {
-        if (Status == InvoiceStatus.Paid)
-            throw new ConflictException("Uma fatura paga não pode ser recalculada.");
+        if (Status is InvoiceStatus.Paid or InvoiceStatus.Canceled)
+            throw new ConflictException("Uma fatura finalizada não pode ser recalculada.");
 
         TotalAmount = FinanceGuard.Money(totalAmount, nameof(totalAmount));
         UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
     }
 
     public void MarkOpen(DateTime utcNow) => ChangeStatus(InvoiceStatus.Open, utcNow);
-    public void Close(DateTime utcNow) => ChangeStatus(InvoiceStatus.Closed, utcNow);
+    public void Close(DateOnly dueDate, DateTime utcNow)
+    {
+        if (Status == InvoiceStatus.Closed)
+            return;
+        if (dueDate <= ClosingDate)
+            throw new ConflictException("O vencimento deve ser posterior ao fechamento da fatura.");
+        if (TotalAmount <= 0)
+            throw new ConflictException("Uma fatura sem compras não pode ser fechada.");
+        DueDate = dueDate;
+        ChangeStatus(InvoiceStatus.Closed, utcNow);
+    }
 
     public void PayInFull(Guid paymentTransactionId, DateOnly paidDate, decimal amount, DateTime utcNow)
     {
@@ -696,6 +734,8 @@ public sealed class Invoice
             throw new ConflictException("A fatura já está paga.");
         if (Status == InvoiceStatus.Canceled)
             throw new ConflictException("Uma fatura cancelada não pode ser paga.");
+        if (Status != InvoiceStatus.Closed)
+            throw new ConflictException("Feche a fatura antes de realizar o pagamento.");
         FinanceGuard.NotEmpty(paymentTransactionId, nameof(paymentTransactionId));
 
         if (TotalAmount <= 0)
@@ -781,6 +821,26 @@ public sealed class InstallmentPlan
     public ExpenseScope Scope { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
+
+    public void UpdatePendingCardPurchase(
+        string description,
+        decimal totalAmount,
+        Guid categoryId,
+        Guid responsibleUserId,
+        ExpenseScope scope,
+        DateTime utcNow)
+    {
+        if (SourceType != InstallmentSourceType.CreditCard)
+            throw new ConflictException("Somente compras de cartão podem ser alteradas por esta operação.");
+        FinanceGuard.NotEmpty(categoryId, nameof(categoryId));
+        FinanceGuard.NotEmpty(responsibleUserId, nameof(responsibleUserId));
+        Description = FinanceGuard.RequiredText(description, nameof(description));
+        TotalAmount = FinanceGuard.PositiveMoney(totalAmount, nameof(totalAmount));
+        CategoryId = categoryId;
+        ResponsibleUserId = responsibleUserId;
+        Scope = scope;
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
 }
 
 internal static class FinanceGuard
