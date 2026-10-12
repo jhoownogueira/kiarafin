@@ -12,6 +12,7 @@ export type InvoiceSummary = {
 export type InvoicePurchase = {
   id: string
   installmentPlanId: string | null
+  cardSubscriptionId: string | null
   description: string
   amount: number
   totalPurchaseAmount: number
@@ -59,4 +60,18 @@ export const invoiceStatusLabel: Record<InvoiceStatus, string> = {
   Closed: "Fechada",
   Paid: "Paga",
   Canceled: "Cancelada",
+}
+
+export type CreditCardSubscription = {
+  id: string
+  creditCardId: string
+  name: string
+  amount: number
+  chargeDay: number
+  startDate: string
+  endDate: string | null
+  categoryId: string
+  responsibleUserId: string
+  scope: "Individual" | "Shared"
+  status: "Active" | "Paused" | "Ended"
 }

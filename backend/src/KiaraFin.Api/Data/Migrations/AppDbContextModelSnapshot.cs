@@ -182,6 +182,71 @@ namespace KiaraFin.Api.Data.Migrations
                     b.ToTable("credit_cards", (string)null);
                 });
 
+            modelBuilder.Entity("KiaraFin.Api.Features.Finance.CreditCardSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ChargeDay")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreditCardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid>("ResponsibleUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("ResponsibleUserId");
+
+                    b.HasIndex("CreditCardId", "Status");
+
+                    b.ToTable("credit_card_subscriptions", (string)null);
+                });
+
             modelBuilder.Entity("KiaraFin.Api.Features.Finance.FinancialAccount", b =>
                 {
                     b.Property<Guid>("Id")
@@ -256,6 +321,9 @@ namespace KiaraFin.Api.Data.Migrations
 
                     b.Property<DateTime?>("CanceledAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CardSubscriptionId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("CategoryId")
                         .HasColumnType("uuid");
@@ -341,6 +409,9 @@ namespace KiaraFin.Api.Data.Migrations
                     b.HasIndex("ResponsibleUserId");
 
                     b.HasIndex("AccountId", "CompetenceDate");
+
+                    b.HasIndex("CardSubscriptionId", "CompetenceDate")
+                        .IsUnique();
 
                     b.HasIndex("HouseholdId", "ClientRequestId")
                         .IsUnique();
@@ -788,6 +859,33 @@ namespace KiaraFin.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("KiaraFin.Api.Features.Finance.CreditCardSubscription", b =>
+                {
+                    b.HasOne("KiaraFin.Api.Features.Finance.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("KiaraFin.Api.Features.Finance.CreditCard", null)
+                        .WithMany()
+                        .HasForeignKey("CreditCardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("KiaraFin.Api.Features.Identity.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("KiaraFin.Api.Features.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("ResponsibleUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("KiaraFin.Api.Features.Finance.FinancialAccount", b =>
                 {
                     b.HasOne("KiaraFin.Api.Features.Identity.Household", null)
@@ -808,6 +906,11 @@ namespace KiaraFin.Api.Data.Migrations
                     b.HasOne("KiaraFin.Api.Features.Finance.FinancialAccount", null)
                         .WithMany()
                         .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("KiaraFin.Api.Features.Finance.CreditCardSubscription", null)
+                        .WithMany()
+                        .HasForeignKey("CardSubscriptionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("KiaraFin.Api.Features.Finance.Category", null)

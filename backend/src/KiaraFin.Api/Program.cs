@@ -8,6 +8,7 @@ using KiaraFin.Api.Features.Auth;
 using KiaraFin.Api.Features.Accounts;
 using KiaraFin.Api.Features.Categories;
 using KiaraFin.Api.Features.CreditCards;
+using KiaraFin.Api.Features.CreditCardSubscriptions;
 using KiaraFin.Api.Features.Dashboard;
 using KiaraFin.Api.Features.Households;
 using KiaraFin.Api.Features.Installments;
@@ -83,6 +84,7 @@ builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<RecurringTransactionService>();
 builder.Services.AddScoped<InstallmentService>();
 builder.Services.AddScoped<CreditCardService>();
+builder.Services.AddScoped<CreditCardSubscriptionService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<ReportService>();
 

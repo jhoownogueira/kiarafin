@@ -71,6 +71,7 @@ public sealed record InvoiceDetailResponse(
 public sealed record InvoicePurchaseResponse(
     Guid Id,
     Guid? InstallmentPlanId,
+    Guid? CardSubscriptionId,
     string Description,
     decimal Amount,
     decimal TotalPurchaseAmount,

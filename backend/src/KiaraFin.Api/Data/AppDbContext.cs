@@ -19,6 +19,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<CreditCard> CreditCards => Set<CreditCard>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InstallmentPlan> InstallmentPlans => Set<InstallmentPlan>();
+    public DbSet<CreditCardSubscription> CreditCardSubscriptions => Set<CreditCardSubscription>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

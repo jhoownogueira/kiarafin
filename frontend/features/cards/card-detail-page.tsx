@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { addDays, addMonths, format, isSameMonth, startOfMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { ArrowLeft, ArrowRight, CheckCircle2, CreditCard as CardIcon, Edit3, LoaderCircle, ShoppingBag, Trash2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, CalendarSync, CheckCircle2, CircleStop, CreditCard as CardIcon, Edit3, LoaderCircle, Pause, Play, Plus, ShoppingBag, Trash2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
@@ -13,8 +13,8 @@ import { FormDialog } from "@/components/shared/form-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { PurchaseDialog } from "@/features/cards/card-dialogs"
-import { invoiceStatusLabel, type CreditCard, type InvoiceDetail, type InvoicePurchase } from "@/features/cards/card-types"
+import { PurchaseDialog, SubscriptionDialog } from "@/features/cards/card-dialogs"
+import { invoiceStatusLabel, type CreditCard, type CreditCardSubscription, type InvoiceDetail, type InvoicePurchase } from "@/features/cards/card-types"
 import { CategorySelect, ResponsibleSelect, useFinanceContext } from "@/features/finance/selectors"
 import { api } from "@/lib/api/client"
 import { getApiErrorMessage } from "@/lib/api/errors"
@@ -31,20 +31,37 @@ export function CardDetailPage({ cardId }: { cardId: string }) {
   const [closeOpen, setCloseOpen] = useState(false)
   const [dueDate, setDueDate] = useState(todayIso())
   const [editingPurchase, setEditingPurchase] = useState<InvoicePurchase | null>(null)
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false)
+  const [editingSubscription, setEditingSubscription] = useState<CreditCardSubscription | null>(null)
   const root = `/households/${householdId}/credit-cards/${cardId}`
   const cardQuery = useQuery({ queryKey: ["credit-cards", householdId, cardId], queryFn: async () => (await api.get<CreditCard>(root)).data, enabled: !!householdId && !!cardId })
-  const suggestedInvoice = cardQuery.data?.invoices
+  const baseSuggestedInvoice = cardQuery.data?.invoices
     .filter((invoice) => invoice.status !== "Paid" && invoice.status !== "Canceled")
     .sort((left, right) => left.dueDate.localeCompare(right.dueDate))[0] ?? cardQuery.data?.invoices[0]
-  const month = selectedMonth ?? (suggestedInvoice ? startOfMonth(localDate(suggestedInvoice.dueDate)) : startOfMonth(new Date()))
-  const invoiceSummary = cardQuery.data?.invoices.find((invoice) => isSameMonth(localDate(invoice.dueDate), month))
+  const generationMonth = selectedMonth ?? (baseSuggestedInvoice ? startOfMonth(localDate(baseSuggestedInvoice.dueDate)) : startOfMonth(new Date()))
+  const generationQuery = useQuery({
+    queryKey: ["credit-card-subscription-generation", householdId, cardId, format(generationMonth, "yyyy-MM")],
+    queryFn: async () => {
+      for (const offset of [-2, -1, 0]) {
+        const occurrenceMonth = addMonths(generationMonth, offset)
+        await api.post(`${root}/subscriptions/generate/${occurrenceMonth.getFullYear()}/${occurrenceMonth.getMonth() + 1}`)
+      }
+      return (await api.get<CreditCard>(root)).data
+    },
+    enabled: !!householdId && !!cardQuery.data,
+  })
+  const card = generationQuery.data ?? cardQuery.data
+  const suggestedInvoice = card?.invoices.filter((invoice) => invoice.status !== "Paid" && invoice.status !== "Canceled").sort((left, right) => left.dueDate.localeCompare(right.dueDate))[0] ?? card?.invoices[0]
+  const month = selectedMonth ?? (suggestedInvoice ? startOfMonth(localDate(suggestedInvoice.dueDate)) : generationMonth)
+  const invoiceSummary = card?.invoices.find((invoice) => isSameMonth(localDate(invoice.dueDate), month))
   const invoiceQuery = useQuery({ queryKey: ["credit-cards", householdId, cardId, "invoice", invoiceSummary?.id], queryFn: async () => (await api.get<InvoiceDetail>(`${root}/invoices/${invoiceSummary!.id}`)).data, enabled: !!invoiceSummary })
+  const subscriptions = useQuery({ queryKey: ["credit-card-subscriptions", householdId, cardId], queryFn: async () => (await api.get<CreditCardSubscription[]>(`${root}/subscriptions`)).data, enabled: !!householdId })
   const invalidate = async () => queryClient.invalidateQueries({ queryKey: ["credit-cards", householdId] })
 
   const pay = useMutation({ mutationFn: async (invoice: InvoiceDetail) => api.post(`${root}/invoices/${invoice.id}/pay`, { accountId: cardQuery.data!.defaultPaymentAccountId, paidDate: todayIso() }), onSuccess: async () => { await invalidate(); toast.success("Fatura paga integralmente.") }, onError: (error) => toast.error(getApiErrorMessage(error)) })
   const close = useMutation({ mutationFn: async ({ invoiceId, date }: { invoiceId: string; date: string }) => api.post(`${root}/invoices/${invoiceId}/close`, { dueDate: date }), onSuccess: async (_, variables) => { setSelectedMonth(startOfMonth(localDate(variables.date))); await invalidate(); setCloseOpen(false); toast.success("Fatura fechada.") }, onError: (error) => toast.error(getApiErrorMessage(error)) })
   const removePurchase = useMutation({ mutationFn: async (purchaseId: string) => api.delete(`${root}/purchases/${purchaseId}`), onSuccess: async () => { await invalidate(); toast.success("Compra e suas parcelas foram excluídas.") }, onError: (error) => toast.error(getApiErrorMessage(error)) })
-  const card = cardQuery.data
+  const changeSubscription = useMutation({ mutationFn: async ({ subscription, action }: { subscription: CreditCardSubscription; action: "pause" | "resume" | "end" }) => api.post(`${root}/subscriptions/${subscription.id}/${action}`, action === "end" ? { endDate: subscription.startDate > todayIso() ? subscription.startDate : todayIso() } : undefined), onSuccess: async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: ["credit-card-subscriptions", householdId, cardId] }), queryClient.invalidateQueries({ queryKey: ["credit-card-subscription-generation", householdId, cardId] })]); toast.success("Assinatura atualizada.") }, onError: (error) => toast.error(getApiErrorMessage(error)) })
   const invoice = invoiceQuery.data
   const editable = invoice?.status === "Upcoming" || invoice?.status === "Open" || invoice?.status === "Closed"
   const closable = invoice?.status === "Upcoming" || invoice?.status === "Open"
@@ -67,15 +84,23 @@ export function CardDetailPage({ cardId }: { cardId: string }) {
           : invoiceQuery.isPending || !invoice ? <div className="flex min-h-80 items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="animate-spin" />Carregando fatura…</div>
           : <>
             <div className="flex flex-col justify-between gap-4 border-b bg-muted/25 p-5 sm:flex-row sm:items-center sm:px-6"><div><div className="flex items-center gap-2"><span className="rounded-full bg-brand-green/10 px-2.5 py-1 text-xs font-semibold text-brand-green">{invoiceStatusLabel[invoice.status]}</span>{invoice.paidDate && <span className="text-xs text-muted-foreground">Paga em {formatDate(invoice.paidDate)}</span>}</div><p className="mt-3 text-sm text-muted-foreground">Fecha em {formatDate(invoice.closingDate)} · vence em {formatDate(invoice.dueDate)}</p></div><div className="sm:text-right"><p className="text-xs text-muted-foreground">Total da fatura</p><p className="mt-1 text-2xl font-semibold tabular-nums">{formatCurrency(invoice.totalAmount)}</p></div></div>
-            <div className="divide-y">{invoice.purchases.length ? invoice.purchases.map((purchase) => <div key={purchase.id} className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6"><div className="min-w-0"><p className="truncate font-medium">{purchase.description}</p><p className="mt-1 text-xs text-muted-foreground">{formatDate(purchase.competenceDate)}{purchase.installmentNumber ? ` · ${purchase.installmentNumber}/${purchase.installmentCount}` : ""}</p></div><div className="flex items-center gap-2"><p className="whitespace-nowrap font-semibold tabular-nums">{formatCurrency(purchase.amount)}</p>{editable && <><Button size="icon" variant="ghost" aria-label={`Editar ${purchase.description}`} onClick={() => setEditingPurchase(purchase)}><Edit3 /></Button><ConfirmDialog trigger={<Button size="icon" variant="ghost" aria-label={`Excluir ${purchase.description}`}><Trash2 /></Button>} title="Excluir esta compra?" description="A compra completa e todas as parcelas futuras serão excluídas. O limite e as faturas serão recalculados." confirmLabel="Excluir compra" destructive pending={removePurchase.isPending} onConfirm={() => removePurchase.mutate(purchase.id)} /></>}</div></div>) : <p className="px-6 py-12 text-center text-sm text-muted-foreground">Esta fatura não possui compras.</p>}</div>
+            <div className="divide-y">{invoice.purchases.length ? invoice.purchases.map((purchase) => <div key={purchase.id} className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-medium">{purchase.description}</p>{purchase.cardSubscriptionId && <span className="rounded-full bg-brand-green/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-brand-green">Assinatura</span>}</div><p className="mt-1 text-xs text-muted-foreground">{formatDate(purchase.competenceDate)}{purchase.installmentNumber ? ` · ${purchase.installmentNumber}/${purchase.installmentCount}` : ""}</p></div><div className="flex items-center gap-2"><p className="whitespace-nowrap font-semibold tabular-nums">{formatCurrency(purchase.amount)}</p>{editable && !purchase.cardSubscriptionId && <><Button size="icon" variant="ghost" aria-label={`Editar ${purchase.description}`} onClick={() => setEditingPurchase(purchase)}><Edit3 /></Button><ConfirmDialog trigger={<Button size="icon" variant="ghost" aria-label={`Excluir ${purchase.description}`}><Trash2 /></Button>} title="Excluir esta compra?" description="A compra completa e todas as parcelas futuras serão excluídas. O limite e as faturas serão recalculados." confirmLabel="Excluir compra" destructive pending={removePurchase.isPending} onConfirm={() => removePurchase.mutate(purchase.id)} /></>}</div></div>) : <p className="px-6 py-12 text-center text-sm text-muted-foreground">Esta fatura não possui compras.</p>}</div>
             <div className="flex flex-wrap justify-end gap-2 border-t p-4 sm:px-6">{closable && invoice.totalAmount > 0 && <Button variant="outline" onClick={() => { setDueDate(invoice.dueDate); setCloseOpen(true) }}><CheckCircle2 />Fechar fatura</Button>}{invoice.status === "Closed" && invoice.totalAmount > 0 && <ConfirmDialog trigger={<Button>Pagar fatura</Button>} title="Pagar fatura integralmente?" description={`Será debitado ${formatCurrency(invoice.totalAmount)} da conta padrão do cartão.`} confirmLabel="Pagar integralmente" pending={pay.isPending} onConfirm={() => pay.mutate(invoice)} />}</div>
           </>}
       </CardContent></Card>
     </div>
 
+    {generationQuery.isError && <p className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Não foi possível lançar uma ou mais assinaturas: {getApiErrorMessage(generationQuery.error)}</p>}
+
+    <Card className="mt-5"><CardContent className="p-5 sm:p-6">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><CalendarSync className="size-5 text-brand-green" /><h2 className="font-heading text-xl font-semibold">Assinaturas</h2></div><p className="mt-1 text-sm text-muted-foreground">Cobranças mensais lançadas automaticamente na fatura correta.</p></div><Button variant="outline" onClick={() => { setEditingSubscription(null); setSubscriptionOpen(true) }}><Plus />Nova assinatura</Button></div>
+      {subscriptions.isPending ? <p className="mt-6 text-sm text-muted-foreground">Carregando assinaturas…</p> : subscriptions.data?.length ? <div className="mt-5 divide-y rounded-xl border">{subscriptions.data.map((subscription) => <div key={subscription.id} className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{subscription.name}</p><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${subscription.status === "Active" ? "bg-brand-green/10 text-brand-green" : "bg-muted text-muted-foreground"}`}>{subscription.status === "Active" ? "Ativa" : subscription.status === "Paused" ? "Pausada" : "Encerrada"}</span></div><p className="mt-1 text-xs text-muted-foreground">{formatCurrency(subscription.amount)} · todo dia {subscription.chargeDay} · desde {formatDate(subscription.startDate)}</p></div><div className="flex gap-1">{subscription.status !== "Ended" && <Button size="icon" variant="ghost" aria-label={`Editar ${subscription.name}`} onClick={() => { setEditingSubscription(subscription); setSubscriptionOpen(true) }}><Edit3 /></Button>}{subscription.status === "Active" && <Button size="icon" variant="ghost" aria-label={`Pausar ${subscription.name}`} onClick={() => changeSubscription.mutate({ subscription, action: "pause" })}><Pause /></Button>}{subscription.status === "Paused" && <Button size="icon" variant="ghost" aria-label={`Retomar ${subscription.name}`} onClick={() => changeSubscription.mutate({ subscription, action: "resume" })}><Play /></Button>}{subscription.status !== "Ended" && <ConfirmDialog trigger={<Button size="icon" variant="ghost" aria-label={`Encerrar ${subscription.name}`}><CircleStop /></Button>} title="Encerrar assinatura?" description="As cobranças já lançadas serão preservadas e nenhuma nova ocorrência será criada após hoje." confirmLabel="Encerrar" destructive pending={changeSubscription.isPending} onConfirm={() => changeSubscription.mutate({ subscription, action: "end" })} />}</div></div>)}</div> : <div className="mt-5 rounded-xl border border-dashed p-8 text-center"><CalendarSync className="mx-auto size-8 text-muted-foreground" /><p className="mt-3 text-sm font-medium">Nenhuma assinatura cadastrada</p><p className="mt-1 text-xs text-muted-foreground">Streaming, academia, aplicativos e outros gastos fixos podem ser automatizados aqui.</p></div>}
+    </CardContent></Card>
+
     <PurchaseDialog card={purchaseOpen ? card : null} onOpenChange={(value) => setPurchaseOpen(value)} householdId={householdId} categories={categories} members={members} />
     <FormDialog open={closeOpen} onOpenChange={setCloseOpen} title="Fechar fatura" description="Escolha o vencimento. As compras ainda poderão ser corrigidas até o pagamento."><form onSubmit={(event) => { event.preventDefault(); if (invoice) close.mutate({ invoiceId: invoice.id, date: dueDate }) }}><label className="space-y-2 text-sm font-medium"><span>Data de vencimento</span><Input required min={invoice ? format(addDays(localDate(invoice.closingDate), 1), "yyyy-MM-dd") : undefined} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label><div className="mt-5 flex justify-end"><Button disabled={close.isPending}>{close.isPending && <LoaderCircle className="animate-spin" />}Fechar fatura</Button></div></form></FormDialog>
     <EditPurchaseDialog purchase={editingPurchase} onOpenChange={(value) => !value && setEditingPurchase(null)} root={root} householdId={householdId} categories={categories} members={members} />
+    <SubscriptionDialog cardId={cardId} subscription={editingSubscription} open={subscriptionOpen} onOpenChange={(value) => { setSubscriptionOpen(value); if (!value) setEditingSubscription(null) }} householdId={householdId} categories={categories} members={members} />
   </div>
 }
 

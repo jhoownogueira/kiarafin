@@ -2,6 +2,7 @@ using KiaraFin.Api.Common.Security;
 using KiaraFin.Api.Data;
 using KiaraFin.Api.Features.Accounts;
 using KiaraFin.Api.Features.Categories;
+using KiaraFin.Api.Features.CreditCardSubscriptions;
 using KiaraFin.Api.Features.Finance;
 using KiaraFin.Api.Features.Households;
 using KiaraFin.Api.Features.Identity;
@@ -25,6 +26,8 @@ public sealed class FinanceFeatureTests
         Assert.Contains("financial_accounts", script, StringComparison.Ordinal);
         Assert.Contains("account_movements", script, StringComparison.Ordinal);
         Assert.Contains("financial_transactions", script, StringComparison.Ordinal);
+        Assert.Contains("credit_card_subscriptions", script, StringComparison.Ordinal);
+        Assert.Contains("CardSubscriptionId", script, StringComparison.Ordinal);
         Assert.Contains("numeric(18,2)", script, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -104,6 +107,34 @@ public sealed class FinanceFeatureTests
 
         Assert.Equal(13, await fixture.Db.Categories.CountAsync(
             x => x.HouseholdId == fixture.Household.Id && x.IsSystem));
+    }
+
+    [Fact]
+    public async Task Card_subscription_generation_is_idempotent_for_the_same_month()
+    {
+        await using var fixture = await FinanceFixture.CreateAsync();
+        var card = new CreditCard(
+            fixture.Household.Id, "Cartão", 5000m, 20, 5,
+            fixture.User.Id, fixture.Source.Id);
+        fixture.Db.CreditCards.Add(card);
+        await fixture.Db.SaveChangesAsync();
+        var service = new CreditCardSubscriptionService(
+            fixture.Db, new StubCurrentUser(fixture.User.Id));
+        await service.CreateAsync(
+            fixture.Household.Id, card.Id,
+            new CreateCreditCardSubscriptionRequest(
+                "Streaming", 49.90m, 31, new DateOnly(2026, 10, 1), null,
+                fixture.ExpenseCategory.Id, fixture.User.Id, ExpenseScope.Shared), default);
+
+        var first = await service.GenerateMonthAsync(
+            fixture.Household.Id, card.Id, 2026, 10, default);
+        var retry = await service.GenerateMonthAsync(
+            fixture.Household.Id, card.Id, 2026, 10, default);
+
+        Assert.Equal(1, first.CreatedCount);
+        Assert.Equal(0, retry.CreatedCount);
+        Assert.Single(await fixture.Db.FinancialTransactions
+            .Where(x => x.CardSubscriptionId != null).ToListAsync());
     }
 
     private sealed class FinanceFixture : IAsyncDisposable
