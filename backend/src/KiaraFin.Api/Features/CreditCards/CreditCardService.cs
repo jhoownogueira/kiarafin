@@ -246,7 +246,8 @@ public sealed class CreditCardService(
         {
             var plan = x.InstallmentPlanId is Guid planId ? plans.GetValueOrDefault(planId) : null;
             return new InvoicePurchaseResponse(
-                x.Id, x.InstallmentPlanId, plan?.Description ?? x.Description, x.Amount,
+                x.Id, x.InstallmentPlanId, x.CardSubscriptionId,
+                plan?.Description ?? x.Description, x.Amount,
                 plan?.TotalAmount ?? x.Amount, x.CompetenceDate, x.CategoryId!.Value,
                 x.ResponsibleUserId, x.Scope, x.InstallmentNumber, x.InstallmentCount);
         }).ToList();

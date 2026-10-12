@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { FormDialog } from "@/components/shared/form-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { CreditCard } from "@/features/cards/card-types"
+import type { CreditCard, CreditCardSubscription } from "@/features/cards/card-types"
 import { AccountSelect, CategorySelect, ResponsibleSelect, useFinanceContext } from "@/features/finance/selectors"
 import { api } from "@/lib/api/client"
 import { getApiErrorMessage } from "@/lib/api/errors"
@@ -15,6 +15,7 @@ import { todayIso } from "@/lib/formatters"
 
 type CardForm = { name: string; institution: string; brand: string; color: string; totalLimit: number; closingDay: number; dueDay: number; responsibleUserId: string; defaultPaymentAccountId: string }
 type PurchaseForm = { description: string; totalAmount: number; installmentCount: number; purchaseDate: string; firstInstallmentDate: string; categoryId: string; responsibleUserId: string; scope: "Individual" | "Shared" }
+type SubscriptionForm = { name: string; amount: number; chargeDay: number; startDate: string; endDate: string; categoryId: string; responsibleUserId: string; scope: "Individual" | "Shared" }
 
 export function CardFormDialog({ open, onOpenChange, householdId, accounts, members }: { open: boolean; onOpenChange: (value: boolean) => void; householdId: string; accounts: ReturnType<typeof useFinanceContext>["accounts"]; members: ReturnType<typeof useFinanceContext>["members"] }) {
   const queryClient = useQueryClient()
@@ -53,6 +54,32 @@ export function PurchaseDialog({ card, onOpenChange, householdId, categories, me
       <Field label="Primeira parcela"><Input type="date" {...form.register("firstInstallmentDate")} /></Field><Field label="Categoria"><CategorySelect categories={categories} type="Expense" required {...form.register("categoryId")} /></Field>
       <Field label="Responsável"><ResponsibleSelect members={members} required {...form.register("responsibleUserId")} /></Field><Field label="Escopo"><select className="h-11 w-full rounded-xl border bg-background px-3" {...form.register("scope")}><option value="Shared">Compartilhada</option><option value="Individual">Individual</option></select></Field>
       <div className="flex justify-end sm:col-span-2"><Button disabled={mutation.isPending}>{mutation.isPending && <LoaderCircle className="animate-spin" />}Registrar compra</Button></div>
+    </form>
+  </FormDialog>
+}
+
+export function SubscriptionDialog({ cardId, subscription, open, onOpenChange, householdId, categories, members }: { cardId: string; subscription: CreditCardSubscription | null; open: boolean; onOpenChange: (value: boolean) => void; householdId: string; categories: ReturnType<typeof useFinanceContext>["categories"]; members: ReturnType<typeof useFinanceContext>["members"] }) {
+  const queryClient = useQueryClient()
+  const root = `/households/${householdId}/credit-cards/${cardId}/subscriptions`
+  const form = useForm<SubscriptionForm>({ values: { name: subscription?.name ?? "", amount: subscription?.amount ?? 0, chargeDay: subscription?.chargeDay ?? new Date().getDate(), startDate: subscription?.startDate ?? todayIso(), endDate: subscription?.endDate ?? "", categoryId: subscription?.categoryId ?? "", responsibleUserId: subscription?.responsibleUserId ?? members[0]?.userId ?? "", scope: subscription?.scope ?? "Shared" } })
+  const mutation = useMutation({
+    mutationFn: async (value: SubscriptionForm) => {
+      if (subscription)
+        await api.put(`${root}/${subscription.id}`, { name: value.name, amount: value.amount, chargeDay: value.chargeDay, endDate: value.endDate || null, categoryId: value.categoryId, responsibleUserId: value.responsibleUserId, scope: value.scope })
+      else
+        await api.post(root, { ...value, endDate: value.endDate || null })
+    },
+    onSuccess: async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: ["credit-card-subscriptions", householdId, cardId] }), queryClient.invalidateQueries({ queryKey: ["credit-card-subscription-generation", householdId, cardId] }), queryClient.invalidateQueries({ queryKey: ["credit-cards", householdId] })]); toast.success(subscription ? "Assinatura atualizada." : "Assinatura criada."); onOpenChange(false) },
+    onError: (error) => toast.error(getApiErrorMessage(error)),
+  })
+
+  return <FormDialog open={open} onOpenChange={onOpenChange} title={subscription ? "Editar assinatura" : "Nova assinatura"} description="A cobrança será incluída mensalmente na fatura correspondente ao dia informado.">
+    <form className="grid gap-4 sm:grid-cols-2" onSubmit={form.handleSubmit((value) => mutation.mutate(value))}>
+      <Field label="Nome"><Input required {...form.register("name")} /></Field><Field label="Valor mensal"><Input type="number" min="0.01" step="0.01" {...form.register("amount", { valueAsNumber: true })} /></Field>
+      <Field label="Dia da cobrança"><Input type="number" min="1" max="31" {...form.register("chargeDay", { valueAsNumber: true })} /></Field><Field label="Início"><Input type="date" disabled={!!subscription} {...form.register("startDate")} /></Field>
+      <Field label="Término opcional"><Input type="date" {...form.register("endDate")} /></Field><Field label="Categoria"><CategorySelect categories={categories} type="Expense" required {...form.register("categoryId")} /></Field>
+      <Field label="Responsável"><ResponsibleSelect members={members} required {...form.register("responsibleUserId")} /></Field><Field label="Escopo"><select className="h-11 w-full rounded-xl border bg-background px-3" {...form.register("scope")}><option value="Shared">Compartilhada</option><option value="Individual">Individual</option></select></Field>
+      <div className="flex justify-end sm:col-span-2"><Button disabled={mutation.isPending}>{mutation.isPending && <LoaderCircle className="animate-spin" />}{subscription ? "Salvar alterações" : "Criar assinatura"}</Button></div>
     </form>
   </FormDialog>
 }

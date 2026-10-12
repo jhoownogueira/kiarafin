@@ -178,6 +178,7 @@ public sealed class FinancialTransaction
     public Guid? CreditCardId { get; private set; }
     public Guid? InvoiceId { get; private set; }
     public Guid? RecurringTransactionId { get; private set; }
+    public Guid? CardSubscriptionId { get; private set; }
     public Guid? InstallmentPlanId { get; private set; }
     public int? InstallmentNumber { get; private set; }
     public int? InstallmentCount { get; private set; }
@@ -348,6 +349,14 @@ public sealed class FinancialTransaction
     {
         FinanceGuard.NotEmpty(recurringTransactionId, nameof(recurringTransactionId));
         RecurringTransactionId = recurringTransactionId;
+    }
+
+    public void LinkCardSubscription(Guid cardSubscriptionId)
+    {
+        if (CreditCardId is null || InvoiceId is null || Status != FinancialTransactionStatus.Pending)
+            throw new ConflictException("Somente compras pendentes do cartão podem ser vinculadas a uma assinatura.");
+        FinanceGuard.NotEmpty(cardSubscriptionId, nameof(cardSubscriptionId));
+        CardSubscriptionId = cardSubscriptionId;
     }
 
     public void LinkInstallment(Guid installmentPlanId, int number, int count)
@@ -840,6 +849,96 @@ public sealed class InstallmentPlan
         ResponsibleUserId = responsibleUserId;
         Scope = scope;
         UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
+}
+
+public sealed class CreditCardSubscription
+{
+    private CreditCardSubscription() { }
+
+    public CreditCardSubscription(
+        Guid householdId,
+        Guid creditCardId,
+        string name,
+        decimal amount,
+        int chargeDay,
+        DateOnly startDate,
+        Guid categoryId,
+        Guid responsibleUserId,
+        ExpenseScope scope,
+        DateOnly? endDate = null)
+    {
+        ValidateDates(startDate, endDate);
+        FinanceGuard.NotEmpty(householdId, nameof(householdId));
+        FinanceGuard.NotEmpty(creditCardId, nameof(creditCardId));
+        FinanceGuard.NotEmpty(categoryId, nameof(categoryId));
+        FinanceGuard.NotEmpty(responsibleUserId, nameof(responsibleUserId));
+        Id = Guid.NewGuid();
+        HouseholdId = householdId;
+        CreditCardId = creditCardId;
+        Name = FinanceGuard.RequiredText(name, nameof(name));
+        Amount = FinanceGuard.PositiveMoney(amount, nameof(amount));
+        ChargeDay = FinanceGuard.DayOfMonth(chargeDay, nameof(chargeDay));
+        StartDate = startDate;
+        EndDate = endDate;
+        CategoryId = categoryId;
+        ResponsibleUserId = responsibleUserId;
+        Scope = scope;
+        Status = RecurringTransactionStatus.Active;
+        CreatedAtUtc = DateTime.UtcNow;
+    }
+
+    public Guid Id { get; private set; }
+    public Guid HouseholdId { get; private set; }
+    public Guid CreditCardId { get; private set; }
+    public string Name { get; private set; } = null!;
+    public decimal Amount { get; private set; }
+    public int ChargeDay { get; private set; }
+    public DateOnly StartDate { get; private set; }
+    public DateOnly? EndDate { get; private set; }
+    public Guid CategoryId { get; private set; }
+    public Guid ResponsibleUserId { get; private set; }
+    public ExpenseScope Scope { get; private set; }
+    public RecurringTransactionStatus Status { get; private set; }
+    public DateTime CreatedAtUtc { get; private set; }
+    public DateTime? UpdatedAtUtc { get; private set; }
+
+    public void Update(string name, decimal amount, int chargeDay, Guid categoryId,
+        Guid responsibleUserId, ExpenseScope scope, DateOnly? endDate, DateTime utcNow)
+    {
+        ValidateDates(StartDate, endDate);
+        FinanceGuard.NotEmpty(categoryId, nameof(categoryId));
+        FinanceGuard.NotEmpty(responsibleUserId, nameof(responsibleUserId));
+        Name = FinanceGuard.RequiredText(name, nameof(name));
+        Amount = FinanceGuard.PositiveMoney(amount, nameof(amount));
+        ChargeDay = FinanceGuard.DayOfMonth(chargeDay, nameof(chargeDay));
+        CategoryId = categoryId;
+        ResponsibleUserId = responsibleUserId;
+        Scope = scope;
+        EndDate = endDate;
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
+
+    public void Pause(DateTime utcNow) => ChangeStatus(RecurringTransactionStatus.Paused, utcNow);
+    public void Resume(DateTime utcNow) => ChangeStatus(RecurringTransactionStatus.Active, utcNow);
+
+    public void End(DateOnly endDate, DateTime utcNow)
+    {
+        ValidateDates(StartDate, endDate);
+        EndDate = endDate;
+        ChangeStatus(RecurringTransactionStatus.Ended, utcNow);
+    }
+
+    private void ChangeStatus(RecurringTransactionStatus status, DateTime utcNow)
+    {
+        Status = status;
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
+
+    private static void ValidateDates(DateOnly startDate, DateOnly? endDate)
+    {
+        if (endDate < startDate)
+            throw new ArgumentException("End date must not be earlier than start date.", nameof(endDate));
     }
 }
 

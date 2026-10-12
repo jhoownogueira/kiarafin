@@ -79,6 +79,7 @@ public sealed class FinancialTransactionConfiguration : IEntityTypeConfiguration
         builder.HasIndex(x => new { x.HouseholdId, x.DueDate, x.Status });
         builder.HasIndex(x => new { x.AccountId, x.CompetenceDate });
         builder.HasIndex(x => new { x.RecurringTransactionId, x.DueDate }).IsUnique();
+        builder.HasIndex(x => new { x.CardSubscriptionId, x.CompetenceDate }).IsUnique();
         builder.HasIndex(x => new { x.InstallmentPlanId, x.InstallmentNumber }).IsUnique();
         builder.HasIndex(x => new { x.InvoiceId, x.Status });
         builder.HasOne<Household>().WithMany().HasForeignKey(x => x.HouseholdId).OnDelete(DeleteBehavior.Restrict);
@@ -88,6 +89,7 @@ public sealed class FinancialTransactionConfiguration : IEntityTypeConfiguration
         builder.HasOne<CreditCard>().WithMany().HasForeignKey(x => x.CreditCardId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<RecurringTransaction>().WithMany().HasForeignKey(x => x.RecurringTransactionId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<CreditCardSubscription>().WithMany().HasForeignKey(x => x.CardSubscriptionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<InstallmentPlan>().WithMany().HasForeignKey(x => x.InstallmentPlanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.ResponsibleUserId).OnDelete(DeleteBehavior.Restrict);
     }
@@ -193,6 +195,28 @@ public sealed class InstallmentPlanConfiguration : IEntityTypeConfiguration<Inst
         builder.Property(x => x.UpdatedAtUtc).IsUtcInstant();
         builder.HasIndex(x => new { x.HouseholdId, x.PurchaseDate });
         builder.HasOne<Household>().WithMany().HasForeignKey(x => x.HouseholdId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Category>().WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(x => x.ResponsibleUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class CreditCardSubscriptionConfiguration : IEntityTypeConfiguration<CreditCardSubscription>
+{
+    public void Configure(EntityTypeBuilder<CreditCardSubscription> builder)
+    {
+        builder.ToTable("credit_card_subscriptions");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Name).HasMaxLength(160).IsRequired();
+        builder.Property(x => x.Amount).IsMoney();
+        builder.Property(x => x.StartDate).HasColumnType("date");
+        builder.Property(x => x.EndDate).HasColumnType("date");
+        builder.Property(x => x.Scope).HasConversion<string>().HasMaxLength(20);
+        builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(x => x.CreatedAtUtc).IsUtcInstant();
+        builder.Property(x => x.UpdatedAtUtc).IsUtcInstant();
+        builder.HasIndex(x => new { x.CreditCardId, x.Status });
+        builder.HasOne<Household>().WithMany().HasForeignKey(x => x.HouseholdId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<CreditCard>().WithMany().HasForeignKey(x => x.CreditCardId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Category>().WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.ResponsibleUserId).OnDelete(DeleteBehavior.Restrict);
     }

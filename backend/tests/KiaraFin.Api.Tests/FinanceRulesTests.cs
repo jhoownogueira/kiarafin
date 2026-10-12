@@ -145,4 +145,24 @@ public sealed class FinanceRulesTests
 
         Assert.Throws<ConflictException>(() => invoice.ReplaceCalculatedTotal(80m, DateTime.UtcNow));
     }
+
+    [Fact]
+    public void Card_subscription_can_be_paused_updated_and_resumed_without_changing_its_start()
+    {
+        var start = new DateOnly(2026, 10, 31);
+        var subscription = new CreditCardSubscription(
+            Guid.NewGuid(), Guid.NewGuid(), "Streaming", 49.90m, 31, start,
+            Guid.NewGuid(), Guid.NewGuid(), ExpenseScope.Shared);
+
+        subscription.Pause(DateTime.UtcNow);
+        subscription.Update(
+            "Streaming família", 59.90m, 30, Guid.NewGuid(), Guid.NewGuid(),
+            ExpenseScope.Individual, null, DateTime.UtcNow);
+        subscription.Resume(DateTime.UtcNow);
+
+        Assert.Equal(RecurringTransactionStatus.Active, subscription.Status);
+        Assert.Equal(start, subscription.StartDate);
+        Assert.Equal(59.90m, subscription.Amount);
+        Assert.Equal(30, subscription.ChargeDay);
+    }
 }

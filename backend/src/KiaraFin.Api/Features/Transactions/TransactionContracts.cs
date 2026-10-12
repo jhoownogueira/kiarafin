@@ -55,5 +55,6 @@ public sealed record TransactionResponse(
     Guid ResponsibleUserId,
     ExpenseScope Scope,
     Guid? RecurringTransactionId,
+    Guid? CardSubscriptionId,
     string? ClientRequestId,
     DateTime CreatedAtUtc);

@@ -218,6 +218,7 @@ public sealed class TransactionService(AppDbContext dbContext, HouseholdAccessSe
         return new TransactionResponse(
             x.Id, x.Description, x.Amount, x.Type, status, x.CategoryId, x.AccountId,
             x.DestinationAccountId, x.CompetenceDate, x.DueDate, x.SettledDate, x.Notes,
-            x.ResponsibleUserId, x.Scope, x.RecurringTransactionId, x.ClientRequestId, x.CreatedAtUtc);
+            x.ResponsibleUserId, x.Scope, x.RecurringTransactionId, x.CardSubscriptionId,
+            x.ClientRequestId, x.CreatedAtUtc);
     }
 }
