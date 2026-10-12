@@ -26,7 +26,27 @@ export const categoryService = {
 }
 
 export const transactionService = {
-  async list(householdId: string, filters: TransactionFilters) { const { data } = await api.get<PagedResponse<Transaction>>(`${root(householdId)}/transactions`, { params: { ...filters, status: filters.status || undefined, pageSize: 20 } }); return data },
+  async list(householdId: string, filters: TransactionFilters, pageSize = 20) { const { data } = await api.get<PagedResponse<Transaction>>(`${root(householdId)}/transactions`, { params: { ...filters, status: filters.status || undefined, pageSize } }); return data },
+  async listMonth(householdId: string, filters: TransactionFilters) {
+    const [year, month] = (filters.from ?? "").split("-").map(Number)
+    await api.post(`${root(householdId)}/recurring-transactions/generate/${year}/${month}`)
+
+    const firstPage = await transactionService.list(householdId, { ...filters, page: 1 }, 100)
+    if (firstPage.totalPages <= 1) return firstPage
+
+    const remainingPages = await Promise.all(
+      Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+        transactionService.list(householdId, { ...filters, page: index + 2 }, 100)),
+    )
+
+    return {
+      ...firstPage,
+      items: [firstPage, ...remainingPages].flatMap((page) => page.items),
+      page: 1,
+      pageSize: firstPage.totalCount,
+      totalPages: firstPage.totalCount > 0 ? 1 : 0,
+    }
+  },
   async create(householdId: string, input: TransactionInput) {
     const payload = {
       ...input,

@@ -20,6 +20,40 @@
   --radius-sm: calc(var(--radius) - 4px); --radius-md: calc(var(--radius) - 2px); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) + 4px); --radius-2xl: calc(var(--radius) + 8px);
 }
 
+@layer components {
+  .notebook-paper {
+    background-color: color-mix(in srgb, var(--card) 96%, var(--brand-canvas));
+    background-image:
+      linear-gradient(90deg, transparent 0, transparent 4.25rem, color-mix(in srgb, var(--destructive) 18%, transparent) 4.25rem, color-mix(in srgb, var(--destructive) 18%, transparent) calc(4.25rem + 1px), transparent calc(4.25rem + 1px)),
+      repeating-linear-gradient(180deg, transparent 0, transparent 3.45rem, color-mix(in srgb, var(--border) 58%, transparent) 3.45rem, color-mix(in srgb, var(--border) 58%, transparent) calc(3.45rem + 1px));
+  }
+
+  .notebook-binding {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 1.25rem;
+    border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    background:
+      radial-gradient(circle at 50% 1.4rem, var(--background) 0 0.22rem, var(--border) 0.23rem 0.29rem, transparent 0.3rem) 0 0 / 100% 2.8rem repeat-y,
+      color-mix(in srgb, var(--muted) 76%, transparent);
+  }
+
+  .notebook-entry-crossed {
+    color: color-mix(in srgb, var(--foreground) 52%, transparent);
+    background-image: linear-gradient(178deg, transparent 48%, color-mix(in srgb, var(--foreground) 34%, transparent) 49%, color-mix(in srgb, var(--foreground) 34%, transparent) 50%, transparent 51%);
+  }
+
+  @media (max-width: 639px) {
+    .notebook-paper {
+      background-image: repeating-linear-gradient(180deg, transparent 0, transparent 3.45rem, color-mix(in srgb, var(--border) 58%, transparent) 3.45rem, color-mix(in srgb, var(--border) 58%, transparent) calc(3.45rem + 1px));
+    }
+
+    .notebook-binding {
+      display: none;
+    }
+  }
+}
+
 :root {
   --brand-canvas: #f9f4f1; --brand-green: #028a61; --brand-ink: #01212b;
   --background: #fcfaf8; --foreground: #01212b; --card: #ffffff; --card-foreground: #01212b; --popover: #ffffff; --popover-foreground: #01212b;
