@@ -39,6 +39,15 @@ public sealed record CreditCardPurchaseRequest(
 
 public sealed record PayInvoiceRequest(Guid AccountId, DateOnly PaidDate);
 
+public sealed record CloseInvoiceRequest(DateOnly DueDate);
+
+public sealed record UpdateCreditCardPurchaseRequest(
+    string Description,
+    decimal TotalAmount,
+    Guid CategoryId,
+    Guid ResponsibleUserId,
+    ExpenseScope Scope);
+
 public sealed record InvoiceSummaryResponse(
     Guid Id,
     DateOnly ClosingDate,
@@ -55,14 +64,20 @@ public sealed record InvoiceDetailResponse(
     DateOnly DueDate,
     decimal TotalAmount,
     InvoiceStatus Status,
+    DateOnly? PaidDate,
     Guid? PaymentTransactionId,
     IReadOnlyList<InvoicePurchaseResponse> Purchases);
 
 public sealed record InvoicePurchaseResponse(
     Guid Id,
+    Guid? InstallmentPlanId,
     string Description,
     decimal Amount,
+    decimal TotalPurchaseAmount,
     DateOnly CompetenceDate,
+    Guid CategoryId,
+    Guid ResponsibleUserId,
+    ExpenseScope Scope,
     int? InstallmentNumber,
     int? InstallmentCount);
 

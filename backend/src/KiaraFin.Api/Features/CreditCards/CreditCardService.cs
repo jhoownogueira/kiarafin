@@ -124,6 +124,90 @@ public sealed class CreditCardService(
             cancellationToken);
     }
 
+    public async Task UpdatePurchaseAsync(
+        Guid householdId,
+        Guid cardId,
+        Guid purchaseId,
+        UpdateCreditCardPurchaseRequest request,
+        CancellationToken cancellationToken)
+    {
+        await RequireMembershipAsync(householdId, cancellationToken);
+        var card = await FindCardAsync(householdId, cardId, cancellationToken);
+        await ValidatePurchaseReferencesAsync(
+            householdId, request.CategoryId, request.ResponsibleUserId, cancellationToken);
+
+        await using var databaseTransaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken);
+        var (plan, entries, invoices) = await LoadEditablePurchaseAsync(
+            householdId, cardId, purchaseId, cancellationToken);
+        var allocations = InstallmentAllocator.Split(request.TotalAmount, plan.InstallmentCount)
+            .ToDictionary(x => x.Number);
+        var activeInvoiceIds = await dbContext.Set<Invoice>()
+            .Where(x => x.CreditCardId == cardId &&
+                        x.Status != InvoiceStatus.Paid && x.Status != InvoiceStatus.Canceled)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+        var committedByOtherPurchases = await dbContext.Set<FinancialTransaction>()
+            .Where(x => x.CreditCardId == cardId && x.InvoiceId != null &&
+                        activeInvoiceIds.Contains(x.InvoiceId.Value) &&
+                        x.InstallmentPlanId != plan.Id &&
+                        x.Status != FinancialTransactionStatus.Canceled)
+            .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+        if (committedByOtherPurchases + request.TotalAmount > card.TotalLimit)
+            throw new ConflictException("A alteração excede o limite disponível do cartão.");
+
+        var oldTotals = entries.GroupBy(x => x.InvoiceId!.Value)
+            .ToDictionary(x => x.Key, x => x.Sum(item => item.Amount));
+        var now = DateTime.UtcNow;
+        foreach (var entry in entries)
+        {
+            var allocation = allocations[entry.InstallmentNumber ?? 1];
+            entry.UpdatePendingCreditCardPurchase(
+                $"{request.Description} {allocation.Number}/{plan.InstallmentCount}",
+                allocation.Amount,
+                request.CategoryId,
+                request.ResponsibleUserId,
+                request.Scope,
+                now);
+        }
+        plan.UpdatePendingCardPurchase(
+            request.Description, request.TotalAmount, request.CategoryId,
+            request.ResponsibleUserId, request.Scope, now);
+        foreach (var invoice in invoices)
+        {
+            var updatedPlanTotal = entries.Where(x => x.InvoiceId == invoice.Id).Sum(x => x.Amount);
+            invoice.ReplaceCalculatedTotal(
+                invoice.TotalAmount - oldTotals.GetValueOrDefault(invoice.Id) + updatedPlanTotal, now);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await databaseTransaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task DeletePurchaseAsync(
+        Guid householdId,
+        Guid cardId,
+        Guid purchaseId,
+        CancellationToken cancellationToken)
+    {
+        await RequireMembershipAsync(householdId, cancellationToken);
+        await FindCardAsync(householdId, cardId, cancellationToken);
+        await using var databaseTransaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken);
+        var (plan, entries, invoices) = await LoadEditablePurchaseAsync(
+            householdId, cardId, purchaseId, cancellationToken);
+        var totals = entries.GroupBy(x => x.InvoiceId!.Value)
+            .ToDictionary(x => x.Key, x => x.Sum(item => item.Amount));
+        var now = DateTime.UtcNow;
+        foreach (var invoice in invoices)
+            invoice.ReplaceCalculatedTotal(invoice.TotalAmount - totals.GetValueOrDefault(invoice.Id), now);
+
+        dbContext.Set<FinancialTransaction>().RemoveRange(entries);
+        dbContext.Set<InstallmentPlan>().Remove(plan);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await databaseTransaction.CommitAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<InvoiceSummaryResponse>> ListInvoicesAsync(
         Guid householdId,
         Guid cardId,
@@ -149,15 +233,56 @@ public sealed class CreditCardService(
         var invoice = await dbContext.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(
             x => x.Id == invoiceId && x.CreditCardId == cardId && x.HouseholdId == householdId,
             cancellationToken) ?? throw new NotFoundException("Fatura não encontrada.");
-        var purchases = await dbContext.Set<FinancialTransaction>().AsNoTracking()
+        var purchaseEntities = await dbContext.Set<FinancialTransaction>().AsNoTracking()
             .Where(x => x.InvoiceId == invoice.Id && x.Type == FinancialTransactionType.Expense)
             .OrderBy(x => x.CompetenceDate)
-            .Select(x => new InvoicePurchaseResponse(
-                x.Id, x.Description, x.Amount, x.CompetenceDate, x.InstallmentNumber, x.InstallmentCount))
             .ToListAsync(cancellationToken);
+        var planIds = purchaseEntities.Where(x => x.InstallmentPlanId != null)
+            .Select(x => x.InstallmentPlanId!.Value).Distinct().ToList();
+        var plans = await dbContext.Set<InstallmentPlan>().AsNoTracking()
+            .Where(x => planIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, cancellationToken);
+        var purchases = purchaseEntities.Select(x =>
+        {
+            var plan = x.InstallmentPlanId is Guid planId ? plans.GetValueOrDefault(planId) : null;
+            return new InvoicePurchaseResponse(
+                x.Id, x.InstallmentPlanId, plan?.Description ?? x.Description, x.Amount,
+                plan?.TotalAmount ?? x.Amount, x.CompetenceDate, x.CategoryId!.Value,
+                x.ResponsibleUserId, x.Scope, x.InstallmentNumber, x.InstallmentCount);
+        }).ToList();
         return new InvoiceDetailResponse(
             invoice.Id, invoice.CreditCardId, invoice.CycleStartDate, invoice.ClosingDate,
-            invoice.DueDate, invoice.TotalAmount, invoice.Status, invoice.PaymentTransactionId, purchases);
+            invoice.DueDate, invoice.TotalAmount, invoice.Status, invoice.PaidDate,
+            invoice.PaymentTransactionId, purchases);
+    }
+
+    public async Task<InvoiceDetailResponse> CloseInvoiceAsync(
+        Guid householdId,
+        Guid cardId,
+        Guid invoiceId,
+        CloseInvoiceRequest request,
+        CancellationToken cancellationToken)
+    {
+        await RequireMembershipAsync(householdId, cancellationToken);
+        await using var databaseTransaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken);
+        var invoice = await dbContext.Set<Invoice>().SingleOrDefaultAsync(
+            x => x.Id == invoiceId && x.CreditCardId == cardId && x.HouseholdId == householdId,
+            cancellationToken) ?? throw new NotFoundException("Fatura não encontrada.");
+        if (invoice.Status != InvoiceStatus.Closed)
+        {
+            var now = DateTime.UtcNow;
+            invoice.Close(request.DueDate, now);
+            var purchases = await dbContext.Set<FinancialTransaction>()
+                .Where(x => x.InvoiceId == invoice.Id && x.Type == FinancialTransactionType.Expense &&
+                            x.Status == FinancialTransactionStatus.Pending)
+                .ToListAsync(cancellationToken);
+            foreach (var purchase in purchases)
+                purchase.UpdateInvoiceDueDate(request.DueDate, now);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        await databaseTransaction.CommitAsync(cancellationToken);
+        return await GetInvoiceAsync(householdId, cardId, invoiceId, cancellationToken);
     }
 
     public async Task<InvoicePaymentResponse> PayInvoiceAsync(
@@ -250,6 +375,49 @@ public sealed class CreditCardService(
             x => x.Id == accountId && x.HouseholdId == householdId && x.IsActive,
             cancellationToken))
             throw new AppValidationException("Conta padrão de pagamento inválida.");
+    }
+
+    private async Task ValidatePurchaseReferencesAsync(
+        Guid householdId,
+        Guid categoryId,
+        Guid responsibleUserId,
+        CancellationToken cancellationToken)
+    {
+        if (!await dbContext.Set<Category>().AnyAsync(
+            x => x.Id == categoryId && x.HouseholdId == householdId && x.IsActive &&
+                 x.Type == CategoryType.Expense, cancellationToken))
+            throw new AppValidationException("Categoria de despesa inválida.");
+        if (!await dbContext.Set<HouseholdMembership>().AnyAsync(
+            x => x.HouseholdId == householdId && x.UserId == responsibleUserId,
+            cancellationToken))
+            throw new AppValidationException("Responsável não pertence ao núcleo financeiro.");
+    }
+
+    private async Task<(InstallmentPlan Plan, List<FinancialTransaction> Entries, List<Invoice> Invoices)>
+        LoadEditablePurchaseAsync(
+            Guid householdId,
+            Guid cardId,
+            Guid purchaseId,
+            CancellationToken cancellationToken)
+    {
+        var selectedEntry = await dbContext.Set<FinancialTransaction>().SingleOrDefaultAsync(
+            x => x.Id == purchaseId && x.HouseholdId == householdId && x.CreditCardId == cardId &&
+                 x.InstallmentPlanId != null,
+            cancellationToken) ?? throw new NotFoundException("Compra não encontrada.");
+        var plan = await dbContext.Set<InstallmentPlan>().SingleAsync(
+            x => x.Id == selectedEntry.InstallmentPlanId!.Value && x.HouseholdId == householdId,
+            cancellationToken);
+        var entries = await dbContext.Set<FinancialTransaction>()
+            .Where(x => x.InstallmentPlanId == plan.Id && x.CreditCardId == cardId)
+            .ToListAsync(cancellationToken);
+        var invoiceIds = entries.Where(x => x.InvoiceId != null).Select(x => x.InvoiceId!.Value).Distinct().ToList();
+        var invoices = await dbContext.Set<Invoice>()
+            .Where(x => invoiceIds.Contains(x.Id) && x.HouseholdId == householdId)
+            .ToListAsync(cancellationToken);
+        if (entries.Any(x => x.Status != FinancialTransactionStatus.Pending) ||
+            invoices.Any(x => x.Status is InvoiceStatus.Paid or InvoiceStatus.Canceled))
+            throw new ConflictException("A compra não pode ser alterada porque uma de suas faturas já foi paga ou cancelada.");
+        return (plan, entries, invoices);
     }
 
     private async Task RequireMembershipAsync(Guid householdId, CancellationToken cancellationToken)

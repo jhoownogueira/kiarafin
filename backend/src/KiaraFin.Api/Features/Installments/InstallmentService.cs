@@ -101,9 +101,15 @@ public sealed class InstallmentService(AppDbContext dbContext, ICurrentUser curr
         CancellationToken cancellationToken)
     {
         var card = await dbContext.Set<CreditCard>().SingleAsync(x => x.Id == plan.SourceId, cancellationToken);
+        var activeInvoiceIds = await dbContext.Set<Invoice>().AsNoTracking()
+            .Where(x => x.CreditCardId == card.Id &&
+                        x.Status != InvoiceStatus.Paid && x.Status != InvoiceStatus.Canceled)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
         var committed = await dbContext.Set<FinancialTransaction>()
             .Where(x => x.HouseholdId == plan.HouseholdId &&
                         x.CreditCardId == card.Id &&
+                        x.InvoiceId != null && activeInvoiceIds.Contains(x.InvoiceId.Value) &&
                         x.Status != FinancialTransactionStatus.Canceled)
             .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
         if (committed + plan.TotalAmount > card.TotalLimit)

@@ -1,3 +1,4 @@
+using KiaraFin.Api.Common.Exceptions;
 using KiaraFin.Api.Features.Finance;
 using Xunit;
 
@@ -111,5 +112,37 @@ public sealed class FinanceRulesTests
             new DateOnly(2026, 1, 1),
             Guid.NewGuid(),
             ExpenseScope.Shared));
+    }
+
+    [Fact]
+    public void Invoice_must_be_closed_manually_before_payment()
+    {
+        var invoice = new Invoice(
+            Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 10, 6),
+            new DateOnly(2026, 11, 5), new DateOnly(2026, 11, 12));
+        invoice.ReplaceCalculatedTotal(340m, DateTime.UtcNow);
+
+        Assert.Throws<ConflictException>(() => invoice.PayInFull(
+            Guid.NewGuid(), new DateOnly(2026, 11, 12), 340m, DateTime.UtcNow));
+
+        invoice.Close(new DateOnly(2026, 11, 18), DateTime.UtcNow);
+        invoice.PayInFull(Guid.NewGuid(), new DateOnly(2026, 11, 18), 340m, DateTime.UtcNow);
+
+        Assert.Equal(InvoiceStatus.Paid, invoice.Status);
+        Assert.Equal(new DateOnly(2026, 11, 18), invoice.DueDate);
+    }
+
+    [Fact]
+    public void Paid_invoice_cannot_be_recalculated()
+    {
+        var invoice = new Invoice(
+            Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 10, 6),
+            new DateOnly(2026, 11, 5), new DateOnly(2026, 11, 12));
+        invoice.ReplaceCalculatedTotal(100m, DateTime.UtcNow);
+        invoice.Close(new DateOnly(2026, 11, 15), DateTime.UtcNow);
+        invoice.ReplaceCalculatedTotal(90m, DateTime.UtcNow);
+        invoice.PayInFull(Guid.NewGuid(), new DateOnly(2026, 11, 15), 90m, DateTime.UtcNow);
+
+        Assert.Throws<ConflictException>(() => invoice.ReplaceCalculatedTotal(80m, DateTime.UtcNow));
     }
 }
