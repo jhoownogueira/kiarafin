@@ -42,6 +42,38 @@ public sealed class TelegramNotificationTests
         Assert.Equal(0, handler.CallCount);
     }
 
+    [Fact]
+    public async Task Sends_a_friendly_forecast_message_when_the_application_starts()
+    {
+        var handler = new CapturingHandler();
+        var service = CreateService(handler);
+
+        await service.NotifyForecastAsync(new BalanceForecastNotification(
+            "jhoownogueira@outlook.com", BalanceForecastNotificationReason.ApplicationStarted,
+            13960m, 0m, 2536m, 8489.71m, 2934.29m, null,
+            new DateTime(2026, 10, 19, 20, 30, 0, DateTimeKind.Utc)), default);
+
+        using var body = JsonDocument.Parse(handler.Body);
+        var text = body.RootElement.GetProperty("text").GetString();
+        Assert.Contains("🚀 <b>KiaraFin online!</b>", text, StringComparison.Ordinal);
+        Assert.Contains("💳 Cartão atual", text, StringComparison.Ordinal);
+        Assert.Contains("📈 Resultado previsto", text, StringComparison.Ordinal);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task Does_not_send_a_forecast_update_when_the_result_did_not_change()
+    {
+        var handler = new CapturingHandler();
+        var service = CreateService(handler);
+
+        await service.NotifyForecastAsync(new BalanceForecastNotification(
+            "jhoownogueira@outlook.com", BalanceForecastNotificationReason.OpenFinanceSync,
+            1000m, 0m, 200m, 300m, 500m, 500m, DateTime.UtcNow), default);
+
+        Assert.Equal(0, handler.CallCount);
+    }
+
     private static TelegramNotificationService CreateService(CapturingHandler handler, long chatId = 734302182)
     {
         var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.telegram.test/") };

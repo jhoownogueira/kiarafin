@@ -6,6 +6,7 @@ using KiaraFin.Api.Features.Finance;
 using KiaraFin.Api.Features.Forecasts;
 using KiaraFin.Api.Features.Households;
 using KiaraFin.Api.Features.Identity;
+using KiaraFin.Api.Features.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -69,8 +70,31 @@ public sealed class ForecastTests
         Assert.Equal(100m, result.BalanceForecast.Summary.MonthlyExtraIncome);
         Assert.Equal(1000m, result.BalanceForecast.Summary.MonthlyFixedExpenses);
         Assert.Equal(750m, result.BalanceForecast.Summary.KnownCardInvoices);
+        Assert.Equal(3750m, result.BalanceForecast.Summary.EstimatedCardInvoices);
         Assert.Equal(750m, result.BalanceForecast.Months[0].CardInvoices);
-        Assert.Equal(23850m, result.BalanceForecast.Summary.ProjectedBalance);
+        Assert.Equal(0m, result.BalanceForecast.Months[0].EstimatedCardInvoices);
+        Assert.Equal(750m, result.BalanceForecast.Months[1].EstimatedCardInvoices);
+        Assert.Equal(20100m, result.BalanceForecast.Summary.ProjectedBalance);
+    }
+
+    [Fact]
+    public async Task Changing_a_forecast_notifies_the_new_current_month_result()
+    {
+        await using var fixture = await ForecastFixture.CreateAsync();
+        var access = new HouseholdAccessService(fixture.Db, new StubCurrentUser(fixture.User.Id));
+        var notifications = new CapturingNotificationService();
+        var service = new ForecastService(
+            fixture.Db, access, new DashboardService(fixture.Db, access), notifications);
+
+        await service.CreateAsync(
+            fixture.Household.Id,
+            new SaveForecastEntryRequest("Salário", ForecastEntryType.Salary, 5000m, 5),
+            default);
+
+        var notification = Assert.Single(notifications.Forecasts);
+        Assert.Equal(BalanceForecastNotificationReason.ForecastEdited, notification.Reason);
+        Assert.Equal(0m, notification.PreviousResult);
+        Assert.Equal(5000m, notification.Result);
     }
 
     private sealed class ForecastFixture : IAsyncDisposable
@@ -123,5 +147,20 @@ public sealed class ForecastTests
     private sealed class StubCurrentUser(Guid userId) : ICurrentUser
     {
         public Guid UserId { get; } = userId;
+    }
+
+    private sealed class CapturingNotificationService : IAccountNotificationService
+    {
+        public List<BalanceForecastNotification> Forecasts { get; } = [];
+
+        public Task NotifyAsync(
+            AccountUpdateNotification notification, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task NotifyForecastAsync(
+            BalanceForecastNotification notification, CancellationToken cancellationToken)
+        {
+            Forecasts.Add(notification);
+            return Task.CompletedTask;
+        }
     }
 }

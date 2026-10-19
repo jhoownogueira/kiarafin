@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Globalization;
 using Microsoft.Extensions.Options;
 
 namespace KiaraFin.Api.Features.Notifications;
@@ -31,7 +32,26 @@ public sealed record AccountUpdateNotification(
 public interface IAccountNotificationService
 {
     Task NotifyAsync(AccountUpdateNotification notification, CancellationToken cancellationToken);
+    Task NotifyForecastAsync(BalanceForecastNotification notification, CancellationToken cancellationToken);
 }
+
+public enum BalanceForecastNotificationReason
+{
+    ApplicationStarted,
+    ForecastEdited,
+    OpenFinanceSync
+}
+
+public sealed record BalanceForecastNotification(
+    string Email,
+    BalanceForecastNotificationReason Reason,
+    decimal Salary,
+    decimal ExtraIncome,
+    decimal FixedExpenses,
+    decimal CardInvoices,
+    decimal Result,
+    decimal? PreviousResult,
+    DateTime OccurredAtUtc);
 
 public sealed class TelegramNotificationService(
     HttpClient httpClient,
@@ -50,26 +70,22 @@ public sealed class TelegramNotificationService(
             !string.Equals(notification.Email, AllowedEmail, StringComparison.OrdinalIgnoreCase))
             return;
 
-        try
-        {
-            using var response = await httpClient.PostAsJsonAsync(
-                $"bot{_options.BotToken}/sendMessage",
-                new
-                {
-                    chat_id = AllowedChatId,
-                    text = BuildMessage(notification),
-                    parse_mode = "HTML",
-                    disable_web_page_preview = true
-                },
-                cancellationToken);
-            if (!response.IsSuccessStatusCode)
-                logger.LogWarning("Telegram notification failed with HTTP {StatusCode}", (int)response.StatusCode);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-        catch (HttpRequestException)
-        {
-            logger.LogWarning("Telegram notification could not reach the Bot API");
-        }
+        await SendAsync(BuildMessage(notification), cancellationToken);
+    }
+
+    public async Task NotifyForecastAsync(
+        BalanceForecastNotification notification, CancellationToken cancellationToken)
+    {
+        if (!_options.Enabled ||
+            _options.ChatId != AllowedChatId ||
+            !string.Equals(_options.AuthorizedEmail, AllowedEmail, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(notification.Email, AllowedEmail, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (notification.Reason != BalanceForecastNotificationReason.ApplicationStarted &&
+            notification.PreviousResult == notification.Result)
+            return;
+
+        await SendAsync(BuildForecastMessage(notification), cancellationToken);
     }
 
     private static string BuildMessage(AccountUpdateNotification value)
@@ -100,4 +116,73 @@ public sealed class TelegramNotificationService(
 
     private static string FormatCount(int count, string singular, string plural) =>
         $"<b>{count}</b> {(count == 1 ? singular : plural)}";
+
+    private async Task SendAsync(string text, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await httpClient.PostAsJsonAsync(
+                $"bot{_options.BotToken}/sendMessage",
+                new
+                {
+                    chat_id = AllowedChatId,
+                    text,
+                    parse_mode = "HTML",
+                    disable_web_page_preview = true
+                },
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                logger.LogWarning("Telegram notification failed with HTTP {StatusCode}", (int)response.StatusCode);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (HttpRequestException)
+        {
+            logger.LogWarning("Telegram notification could not reach the Bot API");
+        }
+    }
+
+    private static string BuildForecastMessage(BalanceForecastNotification value)
+    {
+        var localTime = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(value.OccurredAtUtc, DateTimeKind.Utc),
+            TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"));
+        var title = value.Reason switch
+        {
+            BalanceForecastNotificationReason.ApplicationStarted => "🚀 <b>KiaraFin online!</b>",
+            BalanceForecastNotificationReason.ForecastEdited => "📝 <b>Previsão atualizada!</b>",
+            _ => "🏦 <b>Nova atualização do cartão!</b>"
+        };
+        var context = value.Reason switch
+        {
+            BalanceForecastNotificationReason.ApplicationStarted => "A aplicação iniciou e sua previsão está disponível.",
+            BalanceForecastNotificationReason.ForecastEdited => "Uma premissa mensal foi alterada.",
+            _ => "O Open Finance alterou sua fatura atual."
+        };
+        var resultEmoji = value.Result >= 0 ? "📈" : "📉";
+        var lines = new List<string>
+        {
+            title,
+            context,
+            "",
+            "📊 <b>Projeção do mês atual</b>",
+            $"💰 Salários: <b>{Money(value.Salary)}</b>",
+            $"✨ Extras: <b>{Money(value.ExtraIncome)}</b>",
+            $"🧾 Contas fixas: <b>− {Money(value.FixedExpenses)}</b>",
+            $"💳 Cartão atual: <b>− {Money(value.CardInvoices)}</b>",
+            "──────────────",
+            $"{resultEmoji} Resultado previsto: <b>{SignedMoney(value.Result)}</b>"
+        };
+        if (value.PreviousResult is decimal previous)
+            lines.Add($"🔄 Antes: {SignedMoney(previous)} · diferença: {SignedMoney(value.Result - previous)}");
+        lines.Add("");
+        lines.Add($"🕒 {localTime:dd/MM/yyyy 'às' HH:mm}");
+        lines.Add("🔐 Mensagem privada do seu KiaraFin.");
+        return string.Join('\n', lines);
+    }
+
+    private static string Money(decimal value) =>
+        Math.Abs(value).ToString("C", CultureInfo.GetCultureInfo("pt-BR"));
+
+    private static string SignedMoney(decimal value) =>
+        $"{(value >= 0 ? "+" : "−")} {Money(value)}";
 }

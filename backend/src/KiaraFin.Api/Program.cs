@@ -111,6 +111,7 @@ builder.Services.AddSingleton<IAccountNotificationService>(services =>
     return new TelegramNotificationService(client, settings,
         services.GetRequiredService<ILogger<TelegramNotificationService>>());
 });
+builder.Services.AddHostedService<ApplicationStartupNotificationService>();
 builder.Services.AddOptions<PluggyOptions>()
     .Bind(builder.Configuration.GetSection(PluggyOptions.SectionName))
     .Validate(x => !x.Enabled || (!string.IsNullOrWhiteSpace(x.ClientId) && !string.IsNullOrWhiteSpace(x.ClientSecret)

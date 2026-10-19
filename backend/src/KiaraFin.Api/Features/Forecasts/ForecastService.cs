@@ -1,11 +1,18 @@
 using KiaraFin.Api.Common.Exceptions;
 using KiaraFin.Api.Data;
+using KiaraFin.Api.Features.Dashboard;
 using KiaraFin.Api.Features.Households;
+using KiaraFin.Api.Features.Notifications;
 using Microsoft.EntityFrameworkCore;
 
 namespace KiaraFin.Api.Features.Forecasts;
 
-public sealed class ForecastService(AppDbContext dbContext, HouseholdAccessService access)
+public sealed class ForecastService(
+    AppDbContext dbContext,
+    HouseholdAccessService access,
+    DashboardService? dashboard = null,
+    IAccountNotificationService? notifications = null,
+    ILogger<ForecastService>? logger = null)
 {
     public async Task<IReadOnlyList<ForecastEntryResponse>> ListAsync(
         Guid householdId, CancellationToken cancellationToken)
@@ -41,8 +48,10 @@ public sealed class ForecastService(AppDbContext dbContext, HouseholdAccessServi
             throw new AppValidationException(exception.Message);
         }
 
+        var previous = await GetCurrentMonthResultAsync(householdId, cancellationToken);
         dbContext.ForecastEntries.Add(entry);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await NotifyForecastChangeAsync(householdId, previous, cancellationToken);
         return Map(entry);
     }
 
@@ -51,6 +60,7 @@ public sealed class ForecastService(AppDbContext dbContext, HouseholdAccessServi
     {
         await access.RequireMembershipAsync(householdId, cancellationToken);
         var entry = await FindAsync(householdId, id, cancellationToken);
+        var previous = await GetCurrentMonthResultAsync(householdId, cancellationToken);
         try
         {
             entry.Update(request.Name, request.Type, request.Amount, request.ExpectedDay, DateTime.UtcNow);
@@ -61,14 +71,17 @@ public sealed class ForecastService(AppDbContext dbContext, HouseholdAccessServi
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        await NotifyForecastChangeAsync(householdId, previous, cancellationToken);
         return Map(entry);
     }
 
     public async Task DeleteAsync(Guid householdId, Guid id, CancellationToken cancellationToken)
     {
         await access.RequireMembershipAsync(householdId, cancellationToken);
+        var previous = await GetCurrentMonthResultAsync(householdId, cancellationToken);
         dbContext.ForecastEntries.Remove(await FindAsync(householdId, id, cancellationToken));
         await dbContext.SaveChangesAsync(cancellationToken);
+        await NotifyForecastChangeAsync(householdId, previous, cancellationToken);
     }
 
     private async Task<ForecastEntry> FindAsync(Guid householdId, Guid id, CancellationToken cancellationToken) =>
@@ -79,4 +92,36 @@ public sealed class ForecastService(AppDbContext dbContext, HouseholdAccessServi
     private static ForecastEntryResponse Map(ForecastEntry entry) => new(
         entry.Id, entry.Name, entry.Type, entry.Amount, entry.ExpectedDay,
         entry.CreatedAtUtc, entry.UpdatedAtUtc);
+
+    private async Task<decimal?> GetCurrentMonthResultAsync(
+        Guid householdId, CancellationToken cancellationToken)
+    {
+        if (dashboard is null || notifications is null) return null;
+        var analysis = await dashboard.GetBalanceForecastAsync(householdId, cancellationToken);
+        return analysis.Months.FirstOrDefault()?.Net;
+    }
+
+    private async Task NotifyForecastChangeAsync(
+        Guid householdId, decimal? previousResult, CancellationToken cancellationToken)
+    {
+        if (dashboard is null || notifications is null) return;
+        try
+        {
+            var email = await dbContext.Users.AsNoTracking()
+                .Where(x => x.Id == access.UserId)
+                .Select(x => x.Email)
+                .SingleAsync(cancellationToken);
+            var analysis = await dashboard.GetBalanceForecastAsync(householdId, cancellationToken);
+            var current = analysis.Months[0];
+            await notifications.NotifyForecastAsync(new BalanceForecastNotification(
+                email, BalanceForecastNotificationReason.ForecastEdited,
+                current.Salary, current.ExtraIncome, current.FixedExpenses,
+                current.CardInvoices + current.EstimatedCardInvoices,
+                current.Net, previousResult, DateTime.UtcNow), cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger?.LogWarning("Forecast notification failed after a successful forecast change");
+        }
+    }
 }

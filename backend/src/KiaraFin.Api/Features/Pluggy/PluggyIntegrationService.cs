@@ -4,6 +4,7 @@ using KiaraFin.Api.Common.Exceptions;
 using KiaraFin.Api.Common.Security;
 using KiaraFin.Api.Data;
 using KiaraFin.Api.Features.Finance;
+using KiaraFin.Api.Features.Dashboard;
 using KiaraFin.Api.Features.Identity;
 using KiaraFin.Api.Features.Notifications;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,7 @@ public sealed record PluggySyncResult(int Inserted, int Updated, int Deleted, in
 
 public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser currentUser,
     IPluggyClient client, IOptions<PluggyOptions> options, ILogger<PluggyIntegrationService> logger,
-    IAccountNotificationService? notifications = null)
+    IAccountNotificationService? notifications = null, DashboardService? dashboard = null)
 {
     private const string Provider = "PLUGGY";
     private readonly PluggyOptions _options = options.Value;
@@ -59,6 +60,7 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
         var user = await RequireAuthorizedUserAsync(ct); var householdId = await RequireOwnedHouseholdAsync(user.Id, ct);
         // Every remote validation and every page is read before opening the destructive transaction.
         var snapshot = await client.ReadCompleteSnapshotAsync(_options.ItemId, ct);
+        var previousForecast = await GetCurrentForecastResultAsync(householdId, ct);
         await using var tx = await BeginSerializableAsync(ct);
         var integration = await db.FinancialIntegrations.SingleOrDefaultAsync(x => x.UserId == user.Id && x.Provider == Provider, ct);
         if (integration?.InitialImportCompleted == true) throw new ConflictException("A importação inicial já foi concluída.");
@@ -71,6 +73,7 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
         await db.SaveChangesAsync(ct);
         if (tx is not null) await tx.CommitAsync(ct);
         await NotifyChangesAsync(user.Email, result, snapshot, true, ct);
+        await NotifyForecastChangeAsync(user.Email, householdId, previousForecast, ct);
         return result;
     }
 
@@ -90,6 +93,7 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
             await RecordFailureAsync(integration.Id, trigger, ex, ct);
             throw;
         }
+        var previousForecast = await GetCurrentForecastResultAsync(integration.HouseholdId, ct);
         await using var tx = await BeginSerializableAsync(ct);
         try
         {
@@ -122,6 +126,8 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
             await db.SaveChangesAsync(ct);
             if (tx is not null) await tx.CommitAsync(ct);
             await NotifyChangesAsync(_options.AuthorizedEmail, result, snapshot, false, ct);
+            await NotifyForecastChangeAsync(
+                _options.AuthorizedEmail, integration.HouseholdId, previousForecast, ct);
             return result;
         }
         catch (ConflictException)
@@ -338,6 +344,34 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
         catch (Exception)
         {
             logger.LogWarning("Account update notification failed after a successful Pluggy synchronization");
+        }
+    }
+
+    private async Task<decimal?> GetCurrentForecastResultAsync(
+        Guid householdId, CancellationToken cancellationToken)
+    {
+        if (dashboard is null || notifications is null) return null;
+        var analysis = await dashboard.GetBalanceForecastAsync(householdId, cancellationToken);
+        return analysis.Months.FirstOrDefault()?.Net;
+    }
+
+    private async Task NotifyForecastChangeAsync(
+        string email, Guid householdId, decimal? previousResult, CancellationToken cancellationToken)
+    {
+        if (dashboard is null || notifications is null) return;
+        try
+        {
+            var analysis = await dashboard.GetBalanceForecastAsync(householdId, cancellationToken);
+            var current = analysis.Months[0];
+            await notifications.NotifyForecastAsync(new BalanceForecastNotification(
+                email, BalanceForecastNotificationReason.OpenFinanceSync,
+                current.Salary, current.ExtraIncome, current.FixedExpenses,
+                current.CardInvoices + current.EstimatedCardInvoices,
+                current.Net, previousResult, DateTime.UtcNow), cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning("Forecast notification failed after a successful Pluggy synchronization");
         }
     }
 

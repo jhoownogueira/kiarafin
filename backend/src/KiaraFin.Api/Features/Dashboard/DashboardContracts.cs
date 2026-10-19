@@ -30,6 +30,7 @@ public sealed record BalanceForecastSummary(
     decimal MonthlyExtraIncome,
     decimal MonthlyFixedExpenses,
     decimal KnownCardInvoices,
+    decimal EstimatedCardInvoices,
     decimal ProjectedBalance);
 
 public sealed record BalanceForecastMonth(
@@ -38,6 +39,7 @@ public sealed record BalanceForecastMonth(
     decimal ExtraIncome,
     decimal FixedExpenses,
     decimal CardInvoices,
+    decimal EstimatedCardInvoices,
     decimal Net,
     decimal ProjectedBalance);
 

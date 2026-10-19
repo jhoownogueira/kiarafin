@@ -73,6 +73,10 @@ em formação. Essas premissas nunca criam lançamentos ou movimentações de co
 Essa análise começa em zero e não soma o saldo das contas. A fatura vigente é
 apresentada no mês atual, ainda que o vencimento bancário ocorra no mês seguinte;
 as faturas posteriores são distribuídas nos meses seguintes da projeção.
+Quando um mês futuro ainda não possui fatura ou compras em formação, cada cartão
+usa a média de suas três últimas faturas pagas. Na ausência desse histórico, o
+valor atual conhecido é usado como referência. Assim que o Pluggy disponibiliza
+um valor real para o mês, ele substitui integralmente a estimativa daquele cartão.
 
 Uma compra já incluída em uma fatura prevista não é somada novamente como
 despesa pendente de caixa. Parcelas futuras entram pela fatura correspondente,

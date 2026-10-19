@@ -91,14 +91,17 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
         var latest = await LatestAsync(householdId, today, cancellationToken);
         var invoiceItems = await InvoiceItemsAsync(householdId, today, cancellationToken);
         var cards = await CardItemsAsync(householdId, cancellationToken);
-        var balanceForecast = await BalanceForecastAsync(
-            householdId, today, cancellationToken);
+        var balanceForecast = await GetBalanceForecastAsync(householdId, cancellationToken);
 
         return new DashboardResponse(
             monthStart.ToString("yyyy-MM", CultureInfo.InvariantCulture), indicators,
             incomeExpenses, categories, balances, forecast, upcoming, latest, invoiceItems, cards,
             balanceForecast);
     }
+
+    public Task<BalanceForecastAnalysis> GetBalanceForecastAsync(
+        Guid householdId, CancellationToken cancellationToken) =>
+        BalanceForecastAsync(householdId, BusinessDate.Today(), cancellationToken);
 
     private async Task<BalanceForecastAnalysis> BalanceForecastAsync(
         Guid householdId,
@@ -121,7 +124,7 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
         var officialInvoices = await dbContext.Invoices.AsNoTracking().Where(x =>
                 x.HouseholdId == householdId && x.DueDate <= invoiceLookupThrough &&
                 x.Status != InvoiceStatus.Paid && x.Status != InvoiceStatus.Canceled)
-            .Select(x => new { x.DueDate, Amount = x.TotalAmount })
+            .Select(x => new { CardId = x.CreditCardId, x.DueDate, Amount = x.TotalAmount })
             .ToListAsync(cancellationToken);
 
         var cards = await dbContext.CreditCards.AsNoTracking().Where(x =>
@@ -138,34 +141,64 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
             .Select(x => new { CardId = x.CreditCardId!.Value, x.CompetenceDate, x.Amount, x.IsRefund })
             .ToListAsync(cancellationToken);
 
-        var invoiceAmounts = officialInvoices
-            .Select(x => new { Period = ResolveInvoiceForecastPeriod(x.DueDate, projectionStart), x.Amount })
+        var actualInvoiceAmounts = officialInvoices
+            .Select(x => new { x.CardId, Period = ResolveInvoiceForecastPeriod(x.DueDate, projectionStart), x.Amount })
             .Concat(formingPurchases.Select(x => new
             {
+                x.CardId,
                 Period = ResolveInvoiceForecastPeriod(
                     EstimateFormingInvoiceDueDate(x.CompetenceDate, cardDueDays[x.CardId], today),
                     projectionStart),
                 Amount = x.IsRefund ? -x.Amount : x.Amount
             }))
             .Where(x => x.Period <= projectionThrough)
-            .GroupBy(x => new { x.Period.Year, x.Period.Month })
-            .ToDictionary(x => (x.Key.Year, x.Key.Month), x => x.Sum(item => item.Amount));
+            .GroupBy(x => new { x.CardId, x.Period.Year, x.Period.Month })
+            .ToDictionary(
+                x => (x.Key.CardId, x.Key.Year, x.Key.Month),
+                x => x.Sum(item => item.Amount));
+
+        var paidInvoices = await dbContext.Invoices.AsNoTracking().Where(x =>
+                x.HouseholdId == householdId && cardIds.Contains(x.CreditCardId) &&
+                x.Status == InvoiceStatus.Paid && x.TotalAmount > 0)
+            .Select(x => new { CardId = x.CreditCardId, x.DueDate, x.TotalAmount })
+            .ToListAsync(cancellationToken);
+        var averageByCard = paidInvoices
+            .GroupBy(x => x.CardId)
+            .ToDictionary(
+                group => group.Key,
+                group => decimal.Round(
+                    group.OrderByDescending(x => x.DueDate).Take(3).Average(x => x.TotalAmount),
+                    2,
+                    MidpointRounding.AwayFromZero));
+        foreach (var cardId in cardIds.Where(id => !averageByCard.ContainsKey(id)))
+        {
+            var currentKnown = actualInvoiceAmounts.GetValueOrDefault(
+                (cardId, projectionStart.Year, projectionStart.Month));
+            if (currentKnown > 0)
+                averageByCard[cardId] = currentKnown;
+        }
 
         var projectedBalance = 0m;
         var months = Enumerable.Range(0, 6).Select(index => projectionStart.AddMonths(index)).Select(period =>
         {
-            var invoiceTotal = invoiceAmounts.GetValueOrDefault((period.Year, period.Month));
-            var net = salary + extraIncome - fixedExpenses - invoiceTotal;
+            var actualInvoiceTotal = actualInvoiceAmounts
+                .Where(x => x.Key.Year == period.Year && x.Key.Month == period.Month)
+                .Sum(x => x.Value);
+            var estimatedInvoiceTotal = cardIds
+                .Where(cardId => !actualInvoiceAmounts.ContainsKey((cardId, period.Year, period.Month)))
+                .Sum(cardId => averageByCard.GetValueOrDefault(cardId));
+            var net = salary + extraIncome - fixedExpenses - actualInvoiceTotal - estimatedInvoiceTotal;
             projectedBalance += net;
             return new BalanceForecastMonth(
                 period.ToString("yyyy-MM", CultureInfo.InvariantCulture), salary, extraIncome,
-                fixedExpenses, invoiceTotal, net, projectedBalance);
+                fixedExpenses, actualInvoiceTotal, estimatedInvoiceTotal, net, projectedBalance);
         }).ToList();
 
         return new BalanceForecastAnalysis(
             new BalanceForecastSummary(
                 salary, extraIncome, fixedExpenses,
-                months.Sum(x => x.CardInvoices), projectedBalance),
+                months.Sum(x => x.CardInvoices), months.Sum(x => x.EstimatedCardInvoices),
+                projectedBalance),
             months,
             entries);
     }
