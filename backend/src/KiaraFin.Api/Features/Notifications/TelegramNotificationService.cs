@@ -122,7 +122,7 @@ public sealed class TelegramNotificationService(
         try
         {
             using var response = await httpClient.PostAsJsonAsync(
-                $"bot{_options.BotToken}/sendMessage",
+                $"/bot{_options.BotToken}/sendMessage",
                 new
                 {
                     chat_id = AllowedChatId,

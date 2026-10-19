@@ -19,7 +19,7 @@ public sealed class TelegramNotificationTests
             "jhoownogueira@outlook.com", false, 2, 1, 0, 1,
             ["Meu & Banco"], new DateTime(2026, 10, 19, 20, 2, 0, DateTimeKind.Utc)), default);
 
-        Assert.Equal("/botplaceholder-token/sendMessage", handler.Path);
+        Assert.Equal("/bot123456:placeholder-token/sendMessage", handler.Path);
         using var body = JsonDocument.Parse(handler.Body);
         Assert.Equal(734302182, body.RootElement.GetProperty("chat_id").GetInt64());
         var text = body.RootElement.GetProperty("text").GetString();
@@ -80,7 +80,7 @@ public sealed class TelegramNotificationTests
         var options = Options.Create(new TelegramNotificationOptions
         {
             Enabled = true,
-            BotToken = "placeholder-token",
+            BotToken = "123456:placeholder-token",
             ChatId = chatId,
             AuthorizedEmail = "jhoownogueira@outlook.com"
         });
