@@ -69,7 +69,7 @@ public sealed class PluggyClient(HttpClient httpClient, IOptions<PluggyOptions> 
         var bills = new List<PluggyBill>();
         foreach (var account in accounts)
         {
-            transactions.AddRange(await ReadAllPagesAsync("transactions", $"accountId={Uri.EscapeDataString(account.Id)}", e => ParseTransaction(e, account.Id), cancellationToken));
+            transactions.AddRange(await ReadAllTransactionsAsync(account.Id, cancellationToken));
             if (account.Type.Equals("CREDIT", StringComparison.OrdinalIgnoreCase))
                 bills.AddRange(await ReadAllPagesAsync("bills", $"accountId={Uri.EscapeDataString(account.Id)}",
                     e => ParseBill(e, account.Id), cancellationToken, allowMissingResource: true));
@@ -100,6 +100,32 @@ public sealed class PluggyClient(HttpClient httpClient, IOptions<PluggyOptions> 
         } while (page <= expectedPages);
         if (expectedTotal is not null && all.Count != expectedTotal) throw new PluggyIncompleteResponseException($"Paginação incompleta em {resource}: esperado {expectedTotal}, recebido {all.Count}.");
         return all;
+    }
+
+    private async Task<List<PluggyTransaction>> ReadAllTransactionsAsync(string accountId, CancellationToken ct)
+    {
+        var all = new List<PluggyTransaction>();
+        var path = $"v2/transactions?accountId={Uri.EscapeDataString(accountId)}";
+        var visited = new HashSet<string>(StringComparer.Ordinal) { path };
+        while (true)
+        {
+            using var doc = await GetAsync(path, ct);
+            var root = doc?.RootElement ?? throw new PluggyIncompleteResponseException("Resposta vazia em transactions.");
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+                throw new PluggyIncompleteResponseException("Resposta paginada inválida em transactions.");
+            foreach (var element in results.EnumerateArray()) all.Add(ParseTransaction(element, accountId));
+
+            if (!root.TryGetProperty("next", out var next))
+                throw new PluggyIncompleteResponseException("Cursor ausente em transactions.");
+            if (next.ValueKind == JsonValueKind.Null) return all;
+            if (next.ValueKind != JsonValueKind.String || next.GetString() is not string query ||
+                !query.StartsWith("?", StringComparison.Ordinal) || query.Length == 1)
+                throw new PluggyIncompleteResponseException("Cursor inválido em transactions.");
+
+            path = $"v2/transactions{query}";
+            if (!visited.Add(path)) throw new PluggyIncompleteResponseException("Cursor repetido em transactions.");
+        }
     }
 
     private async Task<JsonDocument?> GetAsync(string path, CancellationToken ct, bool allowNotFound = false)
