@@ -83,7 +83,7 @@ Use esse runner apenas para este repositório confiável. Pull requests executam
 somente o job de CI hospedado pelo GitHub; o job no servidor roda apenas para
 `main` ou por disparo manual.
 
-## 3. Secrets e variables do GitHub
+## 3. Secrets do GitHub
 
 Abra:
 
@@ -101,24 +101,16 @@ Adicione estes repository secrets:
 | `PLUGGY_CLIENT_ID` | Client ID da aplicação Pluggy |
 | `PLUGGY_CLIENT_SECRET` | Client Secret da aplicação Pluggy |
 | `PLUGGY_WEBHOOK_SECRET` | Segredo aleatório enviado no cabeçalho configurado do webhook |
-
-Os três secrets Pluggy podem ser cadastrados antes da ativação; o pipeline só
-os exige quando `PLUGGY_ENABLED` for `true`. O workflow não imprime seus
-valores nem os envia ao frontend ou ao container de migrations.
-
-Na aba **Variables**, cadastre:
-
-| Variable | Valor |
-| --- | --- |
 | `PLUGGY_ENABLED` | `false` inicialmente; altere para `true` somente após validar toda a configuração |
 | `PLUGGY_ITEM_ID` | Item previamente autorizado no Meu Pluggy |
 | `PLUGGY_BASE_URL` | Opcional; padrão `https://api.pluggy.ai` |
 | `PLUGGY_AUTHORIZED_EMAIL` | `jhoownogueira@outlook.com` |
 | `PLUGGY_SYNC_INTERVAL_HOURS` | `24` |
 
-O Item ID identifica a conexão e fica em Variables; Client ID, Client Secret e
-o segredo do webhook são credenciais e ficam em Secrets. `PLUGGY_ENABLED` tem
-valor padrão `false`, inclusive quando a variable não existe.
+Os secrets Pluggy podem ser cadastrados antes da ativação; o pipeline só exige
+as credenciais obrigatórias quando `PLUGGY_ENABLED` for `true`. O workflow não
+imprime seus valores nem os envia ao frontend ou ao container de migrations.
+`PLUGGY_ENABLED` tem valor padrão `false`, inclusive quando o secret não existe.
 
 Gere valores fortes no Ubuntu:
 

@@ -17,14 +17,14 @@ O backend lê estas opções:
 
 | Opção .NET | Variável de produção | Tipo | Padrão |
 | --- | --- | --- | --- |
-| `Pluggy:Enabled` | `PLUGGY_ENABLED` | Variable | `false` |
-| `Pluggy:BaseUrl` | `PLUGGY_BASE_URL` | Variable | `https://api.pluggy.ai` |
+| `Pluggy:Enabled` | `PLUGGY_ENABLED` | Secret | `false` |
+| `Pluggy:BaseUrl` | `PLUGGY_BASE_URL` | Secret | `https://api.pluggy.ai` |
 | `Pluggy:ClientId` | `PLUGGY_CLIENT_ID` | Secret | sem valor |
 | `Pluggy:ClientSecret` | `PLUGGY_CLIENT_SECRET` | Secret | sem valor |
-| `Pluggy:ItemId` | `PLUGGY_ITEM_ID` | Variable | sem valor |
+| `Pluggy:ItemId` | `PLUGGY_ITEM_ID` | Secret | sem valor |
 | `Pluggy:WebhookSecret` | `PLUGGY_WEBHOOK_SECRET` | Secret | sem valor |
-| `Pluggy:AuthorizedEmail` | `PLUGGY_AUTHORIZED_EMAIL` | Variable | `jhoownogueira@outlook.com` |
-| `Pluggy:SyncIntervalHours` | `PLUGGY_SYNC_INTERVAL_HOURS` | Variable | `24` |
+| `Pluggy:AuthorizedEmail` | `PLUGGY_AUTHORIZED_EMAIL` | Secret | `jhoownogueira@outlook.com` |
+| `Pluggy:SyncIntervalHours` | `PLUGGY_SYNC_INTERVAL_HOURS` | Secret | `24` |
 
 Em variáveis de ambiente .NET, `:` é representado por `__`; por exemplo,
 `Pluggy__ClientId`. O Compose traduz as variáveis `PLUGGY_*` acima para essas
@@ -32,14 +32,11 @@ opções e as injeta somente no container da API.
 
 Para ativar em produção:
 
-1. Cadastre Client ID, Client Secret e segredo do webhook em GitHub Actions
-   **Secrets**.
-2. Cadastre Item ID, e-mail autorizado e intervalo em GitHub Actions
-   **Variables**.
-3. Mantenha `PLUGGY_ENABLED=false` durante a configuração e o primeiro deploy.
-4. Configure o webhook HTTPS no Dashboard Pluggy com o mesmo segredo.
-5. Altere `PLUGGY_ENABLED` para `true` e faça o deploy.
-6. Entre no KiaraFin como o usuário autorizado, confira a prévia e confirme a
+1. Cadastre todas as opções `PLUGGY_*` em GitHub Actions **Repository secrets**.
+2. Mantenha `PLUGGY_ENABLED=false` durante a configuração e o primeiro deploy.
+3. Configure o webhook HTTPS pela API Pluggy com o mesmo segredo no cabeçalho.
+4. Altere o secret `PLUGGY_ENABLED` para `true` e faça o deploy.
+5. Entre no KiaraFin como o usuário autorizado, confira a prévia e confirme a
    substituição na interface.
 
 O deploy e as migrations nunca executam a importação. A confirmação da
