@@ -81,6 +81,23 @@ public sealed class PluggyClientTests
     }
 
     [Fact]
+    public async Task Null_item_error_is_accepted()
+    {
+        var handler = new DelegateHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/auth")) return Response(HttpStatusCode.OK, "{\"apiKey\":\"key\"}");
+            if (request.RequestUri.AbsolutePath.EndsWith("/items/item-1")) return Response(HttpStatusCode.OK, ItemWithNullErrorJson);
+            if (request.RequestUri.AbsolutePath.EndsWith("/accounts")) return Response(HttpStatusCode.OK, AccountsJson);
+            if (request.RequestUri.AbsolutePath.EndsWith("/transactions")) return Response(HttpStatusCode.OK, EmptyPageJson);
+            return Response(HttpStatusCode.NotFound, "{}");
+        });
+
+        var snapshot = await CreateClient(handler).ReadCompleteSnapshotAsync("item-1", default);
+
+        Assert.Null(snapshot.Item.ErrorCode);
+    }
+
+    [Fact]
     public async Task Network_failure_is_reported_as_pluggy_unavailable()
     {
         var client = CreateClient(new ThrowingHandler(new HttpRequestException("sensitive network detail")));
@@ -117,6 +134,9 @@ public sealed class PluggyClientTests
 
     private const string ItemJson = """
         {"id":"item-1","status":"UPDATED","consentExpiresAt":"2099-01-01T00:00:00Z","connector":{"name":"Meu Pluggy"}}
+        """;
+    private const string ItemWithNullErrorJson = """
+        {"id":"item-1","status":"UPDATED","consentExpiresAt":"2099-01-01T00:00:00Z","connector":{"name":"Meu Pluggy"},"error":null}
         """;
     private const string AccountsJson = """
         {"page":1,"total":1,"totalPages":1,"results":[{"id":"account-1","type":"BANK","subtype":"CHECKING_ACCOUNT","name":"Conta","balance":100}]}
