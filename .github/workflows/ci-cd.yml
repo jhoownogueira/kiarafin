@@ -95,6 +95,10 @@ jobs:
           PLUGGY_WEBHOOK_SECRET: ${{ secrets.PLUGGY_WEBHOOK_SECRET }}
           PLUGGY_AUTHORIZED_EMAIL: ${{ secrets.PLUGGY_AUTHORIZED_EMAIL || 'jhoownogueira@outlook.com' }}
           PLUGGY_SYNC_INTERVAL_HOURS: ${{ secrets.PLUGGY_SYNC_INTERVAL_HOURS || '24' }}
+          TELEGRAM_NOTIFICATIONS_ENABLED: ${{ secrets.TELEGRAM_NOTIFICATIONS_ENABLED || 'false' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || '734302182' }}
+          TELEGRAM_AUTHORIZED_EMAIL: ${{ secrets.TELEGRAM_AUTHORIZED_EMAIL || 'jhoownogueira@outlook.com' }}
         run: |
           if [ -z "$POSTGRES_PASSWORD" ]; then
             echo "::error::Repository secret POSTGRES_PASSWORD is missing"
@@ -141,6 +145,23 @@ jobs:
                 ;;
             esac
           fi
+          case "$TELEGRAM_NOTIFICATIONS_ENABLED" in
+            true|false) ;;
+            *)
+              echo "::error::Repository secret TELEGRAM_NOTIFICATIONS_ENABLED must be true or false"
+              exit 1
+              ;;
+          esac
+          if [ "$TELEGRAM_NOTIFICATIONS_ENABLED" = "true" ]; then
+            if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+              echo "::error::TELEGRAM_BOT_TOKEN is required when Telegram notifications are enabled"
+              exit 1
+            fi
+            if [ "$TELEGRAM_CHAT_ID" != "734302182" ] || [ "$TELEGRAM_AUTHORIZED_EMAIL" != "jhoownogueira@outlook.com" ]; then
+              echo "::error::Telegram notifications must target the authorized user and chat"
+              exit 1
+            fi
+          fi
           docker compose version
 
       - name: Build, migrate and deploy
@@ -160,6 +181,10 @@ jobs:
           PLUGGY_WEBHOOK_SECRET: ${{ secrets.PLUGGY_WEBHOOK_SECRET }}
           PLUGGY_AUTHORIZED_EMAIL: ${{ secrets.PLUGGY_AUTHORIZED_EMAIL || 'jhoownogueira@outlook.com' }}
           PLUGGY_SYNC_INTERVAL_HOURS: ${{ secrets.PLUGGY_SYNC_INTERVAL_HOURS || '24' }}
+          TELEGRAM_NOTIFICATIONS_ENABLED: ${{ secrets.TELEGRAM_NOTIFICATIONS_ENABLED || 'false' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || '734302182' }}
+          TELEGRAM_AUTHORIZED_EMAIL: ${{ secrets.TELEGRAM_AUTHORIZED_EMAIL || 'jhoownogueira@outlook.com' }}
         run: docker compose -f docker-compose.production.yml up --detach --build --remove-orphans --wait
 
       - name: Verify deployment

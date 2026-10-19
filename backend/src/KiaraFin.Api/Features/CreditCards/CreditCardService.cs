@@ -1,4 +1,5 @@
 using System.Data;
+using KiaraFin.Api.Common;
 using KiaraFin.Api.Common.Exceptions;
 using KiaraFin.Api.Common.Security;
 using KiaraFin.Api.Data;
@@ -361,6 +362,24 @@ public sealed class CreditCardService(
             .Select(x => new InvoiceSummaryResponse(
                 x.Id, x.ClosingDate, x.DueDate, x.TotalAmount, x.Status, x.PaidDate))
             .ToListAsync(cancellationToken);
+        var formingInvoices = new List<FormingInvoiceResponse>();
+        if (card.InstitutionControlled && card.DueDay is int dueDay)
+        {
+            var pendingPurchases = await dbContext.Set<FinancialTransaction>().AsNoTracking()
+                .Where(x => x.CreditCardId == card.Id && x.InvoiceId == null &&
+                            x.InstitutionControlled && x.Status == FinancialTransactionStatus.Pending)
+                .OrderBy(x => x.CompetenceDate)
+                .ThenBy(x => x.CreatedAtUtc)
+                .ToListAsync(cancellationToken);
+            formingInvoices = pendingPurchases
+                .GroupBy(x => EstimateDueDate(x.CompetenceDate, dueDay, BusinessDate.Today()))
+                .OrderBy(x => x.Key)
+                .Select(group => new FormingInvoiceResponse(
+                    group.Key,
+                    group.Sum(x => x.IsRefund ? -x.Amount : x.Amount),
+                    group.Select(MapPurchase).ToList()))
+                .ToList();
+        }
         var activeInvoiceIds = invoices
             .Where(x => x.Status is not InvoiceStatus.Paid and not InvoiceStatus.Canceled)
             .Select(x => x.Id)
@@ -379,7 +398,25 @@ public sealed class CreditCardService(
             card.TotalLimit, usedLimit, availableLimit,
             card.ClosingDay, card.DueDay, card.ResponsibleUserId,
             card.DefaultPaymentAccountId, card.Status, invoices,
+            formingInvoices,
             card.SourceProvider, card.ExternalId, card.InstitutionControlled);
+    }
+
+    private static InvoicePurchaseResponse MapPurchase(FinancialTransaction purchase) => new(
+        purchase.Id, purchase.InstallmentPlanId, purchase.CardSubscriptionId,
+        purchase.Description, purchase.Amount, purchase.Amount, purchase.CompetenceDate,
+        purchase.CategoryId!.Value, purchase.ResponsibleUserId, purchase.Scope,
+        purchase.InstallmentNumber, purchase.InstallmentCount, purchase.IsRefund);
+
+    private static DateOnly EstimateDueDate(DateOnly competenceDate, int dueDay, DateOnly today)
+    {
+        var reference = competenceDate > today ? competenceDate : today;
+        var dueDate = new DateOnly(reference.Year, reference.Month,
+            Math.Min(dueDay, DateTime.DaysInMonth(reference.Year, reference.Month)));
+        if (dueDate >= reference) return dueDate;
+        var nextMonth = new DateOnly(reference.Year, reference.Month, 1).AddMonths(1);
+        return new DateOnly(nextMonth.Year, nextMonth.Month,
+            Math.Min(dueDay, DateTime.DaysInMonth(nextMonth.Year, nextMonth.Month)));
     }
 
     private async Task ValidateReferencesAsync(

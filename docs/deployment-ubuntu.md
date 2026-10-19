@@ -106,6 +106,10 @@ Adicione estes repository secrets:
 | `PLUGGY_BASE_URL` | Opcional; padrão `https://api.pluggy.ai` |
 | `PLUGGY_AUTHORIZED_EMAIL` | `jhoownogueira@outlook.com` |
 | `PLUGGY_SYNC_INTERVAL_HOURS` | `24` |
+| `TELEGRAM_NOTIFICATIONS_ENABLED` | `true` para habilitar os avisos privados |
+| `TELEGRAM_BOT_TOKEN` | Token novo gerado pelo BotFather; nunca salve no repositório |
+| `TELEGRAM_CHAT_ID` | `734302182` |
+| `TELEGRAM_AUTHORIZED_EMAIL` | `jhoownogueira@outlook.com` |
 
 Os secrets Pluggy podem ser cadastrados antes da ativação; o pipeline só exige
 as credenciais obrigatórias quando `PLUGGY_ENABLED` for `true`. O workflow não

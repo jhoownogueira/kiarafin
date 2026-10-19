@@ -12,6 +12,7 @@ using KiaraFin.Api.Features.CreditCardSubscriptions;
 using KiaraFin.Api.Features.Dashboard;
 using KiaraFin.Api.Features.Households;
 using KiaraFin.Api.Features.Installments;
+using KiaraFin.Api.Features.Notifications;
 using KiaraFin.Api.Features.RecurringTransactions;
 using KiaraFin.Api.Features.Reports;
 using KiaraFin.Api.Features.Transactions;
@@ -88,6 +89,28 @@ builder.Services.AddScoped<CreditCardService>();
 builder.Services.AddScoped<CreditCardSubscriptionService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<ReportService>();
+builder.Services.AddOptions<TelegramNotificationOptions>()
+    .Bind(builder.Configuration.GetSection(TelegramNotificationOptions.SectionName))
+    .Validate(x => !x.Enabled || !string.IsNullOrWhiteSpace(x.BotToken),
+        "TelegramNotifications:BotToken é obrigatório quando as notificações estão habilitadas.")
+    .Validate(x => !x.Enabled || x.ChatId == 734302182,
+        "TelegramNotifications:ChatId deve identificar o destinatário autorizado.")
+    .Validate(x => !x.Enabled || string.Equals(x.AuthorizedEmail, "jhoownogueira@outlook.com", StringComparison.OrdinalIgnoreCase),
+        "TelegramNotifications:AuthorizedEmail deve identificar o usuário autorizado.")
+    .Validate(x => Uri.TryCreate(x.BaseUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps,
+        "TelegramNotifications:BaseUrl deve ser uma URL HTTPS.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<IAccountNotificationService>(services =>
+{
+    var settings = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<TelegramNotificationOptions>>();
+    var client = new HttpClient
+    {
+        BaseAddress = new Uri(settings.Value.BaseUrl.TrimEnd('/') + "/"),
+        Timeout = TimeSpan.FromSeconds(10)
+    };
+    return new TelegramNotificationService(client, settings,
+        services.GetRequiredService<ILogger<TelegramNotificationService>>());
+});
 builder.Services.AddOptions<PluggyOptions>()
     .Bind(builder.Configuration.GetSection(PluggyOptions.SectionName))
     .Validate(x => !x.Enabled || (!string.IsNullOrWhiteSpace(x.ClientId) && !string.IsNullOrWhiteSpace(x.ClientSecret)

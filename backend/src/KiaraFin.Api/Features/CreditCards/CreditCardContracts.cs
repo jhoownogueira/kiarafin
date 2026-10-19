@@ -83,6 +83,11 @@ public sealed record InvoicePurchaseResponse(
     int? InstallmentCount,
     bool IsRefund);
 
+public sealed record FormingInvoiceResponse(
+    DateOnly ExpectedDueDate,
+    decimal EstimatedTotal,
+    IReadOnlyList<InvoicePurchaseResponse> Purchases);
+
 public sealed record CreditCardResponse(
     Guid Id,
     string Name,
@@ -98,6 +103,7 @@ public sealed record CreditCardResponse(
     Guid? DefaultPaymentAccountId,
     CreditCardStatus Status,
     IReadOnlyList<InvoiceSummaryResponse> Invoices,
+    IReadOnlyList<FormingInvoiceResponse> FormingInvoices,
     string? SourceProvider,
     string? ExternalId,
     bool InstitutionControlled);

@@ -28,9 +28,11 @@ public sealed class TransactionService(AppDbContext dbContext, HouseholdAccessSe
         if (categoryId is not null) query = query.Where(x => x.CategoryId == categoryId);
         if (responsibleUserId is not null) query = query.Where(x => x.ResponsibleUserId == responsibleUserId);
         if (status == FinancialTransactionStatus.Overdue)
-            query = query.Where(x => x.Status == FinancialTransactionStatus.Pending && x.DueDate < today);
+            query = query.Where(x => x.Status == FinancialTransactionStatus.Pending && x.DueDate < today &&
+                !(x.InstitutionControlled && x.CreditCardId != null && x.InvoiceId == null));
         else if (status == FinancialTransactionStatus.Pending)
-            query = query.Where(x => x.Status == FinancialTransactionStatus.Pending && x.DueDate >= today);
+            query = query.Where(x => x.Status == FinancialTransactionStatus.Pending &&
+                (x.DueDate >= today || x.InstitutionControlled && x.CreditCardId != null && x.InvoiceId == null));
         else if (status is not null)
             query = query.Where(x => x.Status == status);
         var total = await query.CountAsync(cancellationToken);
@@ -244,7 +246,8 @@ public sealed class TransactionService(AppDbContext dbContext, HouseholdAccessSe
 
     private static TransactionResponse Map(FinancialTransaction x, DateOnly today)
     {
-        var status = x.Status == FinancialTransactionStatus.Pending && x.DueDate < today
+        var unbilledInstitutionCardPurchase = x.InstitutionControlled && x.CreditCardId is not null && x.InvoiceId is null;
+        var status = x.Status == FinancialTransactionStatus.Pending && x.DueDate < today && !unbilledInstitutionCardPurchase
             ? FinancialTransactionStatus.Overdue
             : x.Status;
         return new TransactionResponse(

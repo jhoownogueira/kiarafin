@@ -75,12 +75,23 @@ integração não cria parcelas, faturas, datas ou descrições ausentes na API.
 Contas `CREDIT` viram cartões; limites, saldos, fechamento e vencimento são
 anuláveis. Faturas só são criadas a partir do recurso `/bills`, e cada compra é
 vinculada a uma fatura apenas quando a Pluggy fornece o `billId` correspondente.
+Compras pendentes de cartão ainda sem `billId` aparecem separadamente como
+**fatura em formação**, com total e vencimento explicitamente provisórios. Essa
+projeção considera apenas lançamentos associados ao cartão; débitos de conta
+permanecem exclusivamente no fluxo de lançamentos e nunca entram na fatura.
 Estornos são preservados como redução de despesa, sem serem apresentados como
 receita.
 
 Valores usam tipos decimais; timestamps são armazenados como instantes UTC e a
 interface apresenta datas no fuso do usuário. Reexecutar a sincronização com o
 mesmo conjunto de origem deve produzir o mesmo estado sem duplicações.
+
+Quando as notificações Telegram estão habilitadas, uma sincronização bem-sucedida
+que altere contas, cartões ou lançamentos envia um resumo privado ao chat
+`734302182`. A API também valida o e-mail `jhoownogueira@outlook.com`; não existe
+endpoint de entrada do Telegram, portanto mensagens de outros usuários não são
+processadas nem respondidas. O token do bot permanece somente no backend como
+secret e nunca é incluído no frontend ou nos logs da aplicação.
 
 Webhooks apenas registram/disparam trabalho persistente e respondem rapidamente.
 O worker consulta a API autenticada antes de aplicar mudanças quando o evento

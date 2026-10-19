@@ -38,6 +38,12 @@ export type InvoiceDetail = {
   purchases: InvoicePurchase[]
 }
 
+export type FormingInvoice = {
+  expectedDueDate: string
+  estimatedTotal: number
+  purchases: InvoicePurchase[]
+}
+
 export type CreditCard = {
   id: string
   name: string
@@ -53,6 +59,7 @@ export type CreditCard = {
   defaultPaymentAccountId: string | null
   status: "Active" | "Inactive"
   invoices: InvoiceSummary[]
+  formingInvoices: FormingInvoice[]
   sourceProvider: string | null
   externalId: string | null
   institutionControlled: boolean

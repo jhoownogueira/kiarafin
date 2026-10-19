@@ -1,8 +1,12 @@
 using KiaraFin.Api.Common.Security;
 using KiaraFin.Api.Data;
+using KiaraFin.Api.Features.CreditCards;
 using KiaraFin.Api.Features.Finance;
+using KiaraFin.Api.Features.Households;
 using KiaraFin.Api.Features.Identity;
+using KiaraFin.Api.Features.Installments;
 using KiaraFin.Api.Features.Pluggy;
+using KiaraFin.Api.Features.Transactions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -70,6 +74,46 @@ public sealed class PluggyIntegrationTests
         Assert.Contains(entries, x => x.ExternalId == "card-refund" && x.IsRefund);
         Assert.Contains(entries, x => x.ExternalId == "card-purchase" && x.InstallmentNumber == 2 && x.InstallmentCount == 6);
         Assert.Empty(await db.AccountMovements.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Forming_invoice_contains_only_unbilled_pending_card_purchases()
+    {
+        await using var db = CreateDatabase();
+        var (user, household) = await SeedOwnerAsync(db);
+        var card = new PluggyAccount("card-1", "CREDIT", "Visa", "Banco", 300m,
+            "CREDIT_CARD", "card-hash", 5000m, 4700m, null,
+            new DateOnly(2026, 11, 12), "VISA", "ACTIVE");
+        var bank = new PluggyAccount("bank-1", "BANK", "Conta", "Banco", 1000m,
+            "CHECKING_ACCOUNT", "bank-hash");
+        var cardPurchase = Transaction("card-pending", 300m, "DEBIT", "PURCHASE", "PENDING") with
+            { AccountId = "card-1", Date = new DateOnly(2026, 10, 5) };
+        var bankDebit = Transaction("bank-pending", 50m, "DEBIT", "PURCHASE", "PENDING") with
+            { AccountId = "bank-1", Date = new DateOnly(2026, 10, 5) };
+        var snapshot = new PluggySnapshot(
+            new PluggyItem("item-1", "UPDATED", DateTime.UtcNow.AddMonths(6), "Meu Pluggy", null),
+            [card, bank], [cardPurchase, bankDebit], []);
+
+        await CreateService(db, user, new StubClient(snapshot)).ActivateAsync(true, default);
+        var currentUser = new StubCurrentUser(user.Id);
+        var cards = new CreditCardService(db, currentUser, new InstallmentService(db, currentUser));
+        var importedCard = await db.CreditCards.SingleAsync();
+
+        var response = await cards.GetAsync(household.Id, importedCard.Id, default);
+
+        var forming = Assert.Single(response.FormingInvoices);
+        var purchase = Assert.Single(forming.Purchases);
+        Assert.Equal("card-pending", (await db.FinancialTransactions.SingleAsync(x => x.Id == purchase.Id)).ExternalId);
+        Assert.Equal(300m, forming.EstimatedTotal);
+        Assert.DoesNotContain(forming.Purchases, x => x.Description == "bank-pending");
+
+        var transactions = new TransactionService(db, new HouseholdAccessService(db, currentUser));
+        var ledger = await transactions.ListAsync(household.Id, 1, 20,
+            new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), null, null, null, null, default);
+        Assert.Equal(FinancialTransactionStatus.Pending,
+            ledger.Items.Single(x => x.Description == "card-pending").Status);
+        Assert.Equal(FinancialTransactionStatus.Overdue,
+            ledger.Items.Single(x => x.Description == "bank-pending").Status);
     }
 
     [Fact]

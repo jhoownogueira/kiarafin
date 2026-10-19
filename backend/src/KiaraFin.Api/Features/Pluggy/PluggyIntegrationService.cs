@@ -5,6 +5,7 @@ using KiaraFin.Api.Common.Security;
 using KiaraFin.Api.Data;
 using KiaraFin.Api.Features.Finance;
 using KiaraFin.Api.Features.Identity;
+using KiaraFin.Api.Features.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
@@ -18,10 +19,11 @@ public sealed record PluggyStatusResponse(FinancialIntegrationStatus Status, str
 public sealed record PluggyPreviewResponse(int ExistingAccounts, int ExistingCreditCards,
     int ExistingTransactions, int PluggyAccounts, int PluggyTransactions, DateTime? ConsentExpiresAtUtc);
 public sealed record ActivatePluggyRequest(bool Confirmed);
-public sealed record PluggySyncResult(int Inserted, int Updated, int Deleted);
+public sealed record PluggySyncResult(int Inserted, int Updated, int Deleted, int AccountsChanged = 0);
 
 public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser currentUser,
-    IPluggyClient client, IOptions<PluggyOptions> options, ILogger<PluggyIntegrationService> logger)
+    IPluggyClient client, IOptions<PluggyOptions> options, ILogger<PluggyIntegrationService> logger,
+    IAccountNotificationService? notifications = null)
 {
     private const string Provider = "PLUGGY";
     private readonly PluggyOptions _options = options.Value;
@@ -66,7 +68,10 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
         await DeleteOwnerFinancialDataAsync(user.Id, householdId, ct);
         var result = await PersistSnapshotAsync(integration, user.Id, householdId, snapshot, new HashSet<string>(StringComparer.Ordinal), ct);
         integration.Complete(snapshot.Accounts.Count, snapshot.Transactions.Count, snapshot.Item.ConsentExpiresAtUtc, DateTime.UtcNow);
-        await db.SaveChangesAsync(ct); if (tx is not null) await tx.CommitAsync(ct); return result;
+        await db.SaveChangesAsync(ct);
+        if (tx is not null) await tx.CommitAsync(ct);
+        await NotifyChangesAsync(user.Email, result, snapshot, true, ct);
+        return result;
     }
 
     public async Task<PluggySyncResult> SynchronizeAsync(Guid? integrationId, string trigger, CancellationToken ct, string? payload = null)
@@ -114,7 +119,10 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
             var result = await PersistSnapshotAsync(integration, integration.UserId, integration.HouseholdId, snapshot, deletedIds, ct);
             sync.Complete(result.Inserted, result.Updated, result.Deleted, DateTime.UtcNow);
             integration.Complete(snapshot.Accounts.Count, snapshot.Transactions.Count, snapshot.Item.ConsentExpiresAtUtc, DateTime.UtcNow);
-            await db.SaveChangesAsync(ct); if (tx is not null) await tx.CommitAsync(ct); return result;
+            await db.SaveChangesAsync(ct);
+            if (tx is not null) await tx.CommitAsync(ct);
+            await NotifyChangesAsync(_options.AuthorizedEmail, result, snapshot, false, ct);
+            return result;
         }
         catch (ConflictException)
         {
@@ -134,7 +142,7 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
         PluggySnapshot snapshot, IReadOnlySet<string> explicitlyDeletedIds, CancellationToken ct)
     {
         ValidateSnapshot(snapshot);
-        var now = DateTime.UtcNow; var inserted = 0; var updated = 0; var deleted = 0;
+        var now = DateTime.UtcNow; var inserted = 0; var updated = 0; var deleted = 0; var accountsChanged = 0;
         var externalAccounts = await db.ExternalFinancialAccounts.Where(x => x.IntegrationId == integration.Id)
             .ToDictionaryAsync(x => x.ExternalAccountId, ct);
         var accountRows = new Dictionary<string, (ExternalFinancialAccount Mapping, FinancialAccount? Account, CreditCard? Card)>(StringComparer.Ordinal);
@@ -142,6 +150,8 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
         {
             var institution = source.InstitutionName ?? snapshot.Item.ConnectorName;
             externalAccounts.TryGetValue(source.Id, out var mapping);
+            if (mapping is null || !string.Equals(mapping.ContentHash, source.ContentHash, StringComparison.Ordinal))
+                accountsChanged++;
             FinancialAccount? account = null; CreditCard? card = null;
             if (source.Type.Equals("CREDIT", StringComparison.OrdinalIgnoreCase))
             {
@@ -305,7 +315,30 @@ public sealed class PluggyIntegrationService(AppDbContext db, ICurrentUser curre
             account.SynchronizeFromInstitution(Provider, source.Id, source.Name, MapAccountType(source), source.Balance - net,
                 DateOnly.FromDateTime(now), source.InstitutionName ?? snapshot.Item.ConnectorName, now);
         }
-        return new(inserted, updated, deleted);
+        return new(inserted, updated, deleted, accountsChanged);
+    }
+
+    private async Task NotifyChangesAsync(string email, PluggySyncResult result, PluggySnapshot snapshot,
+        bool initialImport, CancellationToken ct)
+    {
+        if (notifications is null) return;
+        var institutions = snapshot.Accounts
+            .Select(x => x.InstitutionName ?? snapshot.Item.ConnectorName)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        try
+        {
+            await notifications.NotifyAsync(new AccountUpdateNotification(
+                email, initialImport, result.Inserted, result.Updated, result.Deleted,
+                result.AccountsChanged, institutions, DateTime.UtcNow), ct);
+        }
+        catch (Exception)
+        {
+            logger.LogWarning("Account update notification failed after a successful Pluggy synchronization");
+        }
     }
 
     private static ExternalTransactionMapping NewMapping(Guid integrationId, Guid accountMappingId, PluggyTransaction source, Guid? transactionId, ExternalTransactionKind kind) =>
