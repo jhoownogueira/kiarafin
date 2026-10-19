@@ -26,7 +26,6 @@ public sealed record DashboardCardItem(
     Guid Id, string Name, string? Color, decimal? TotalLimit, decimal? UsedLimit, decimal? AvailableLimit);
 
 public sealed record BalanceForecastSummary(
-    decimal StartingBalance,
     decimal MonthlySalary,
     decimal MonthlyExtraIncome,
     decimal MonthlyFixedExpenses,

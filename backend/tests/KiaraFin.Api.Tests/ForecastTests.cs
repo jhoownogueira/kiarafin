@@ -69,7 +69,8 @@ public sealed class ForecastTests
         Assert.Equal(100m, result.BalanceForecast.Summary.MonthlyExtraIncome);
         Assert.Equal(1000m, result.BalanceForecast.Summary.MonthlyFixedExpenses);
         Assert.Equal(750m, result.BalanceForecast.Summary.KnownCardInvoices);
-        Assert.Equal(24850m, result.BalanceForecast.Summary.ProjectedBalance);
+        Assert.Equal(750m, result.BalanceForecast.Months[0].CardInvoices);
+        Assert.Equal(23850m, result.BalanceForecast.Summary.ProjectedBalance);
     }
 
     private sealed class ForecastFixture : IAsyncDisposable

@@ -70,6 +70,9 @@ Além da projeção operacional, o dashboard possui uma análise de planejamento
 seis meses. Ela repete as premissas mensais cadastradas pelo usuário e cruza
 salários, rendas extras e contas fixas com faturas oficiais e faturas de cartão
 em formação. Essas premissas nunca criam lançamentos ou movimentações de conta.
+Essa análise começa em zero e não soma o saldo das contas. A fatura vigente é
+apresentada no mês atual, ainda que o vencimento bancário ocorra no mês seguinte;
+as faturas posteriores são distribuídas nos meses seguintes da projeção.
 
 Uma compra já incluída em uma fatura prevista não é somada novamente como
 despesa pendente de caixa. Parcelas futuras entram pela fatura correspondente,

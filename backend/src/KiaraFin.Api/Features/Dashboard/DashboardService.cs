@@ -92,7 +92,7 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
         var invoiceItems = await InvoiceItemsAsync(householdId, today, cancellationToken);
         var cards = await CardItemsAsync(householdId, cancellationToken);
         var balanceForecast = await BalanceForecastAsync(
-            householdId, today, availableBalance, cancellationToken);
+            householdId, today, cancellationToken);
 
         return new DashboardResponse(
             monthStart.ToString("yyyy-MM", CultureInfo.InvariantCulture), indicators,
@@ -103,11 +103,11 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
     private async Task<BalanceForecastAnalysis> BalanceForecastAsync(
         Guid householdId,
         DateOnly today,
-        decimal availableBalance,
         CancellationToken cancellationToken)
     {
         var projectionStart = new DateOnly(today.Year, today.Month, 1);
         var projectionThrough = projectionStart.AddMonths(6).AddDays(-1);
+        var invoiceLookupThrough = projectionThrough.AddMonths(1);
         var entries = await dbContext.ForecastEntries.AsNoTracking()
             .Where(x => x.HouseholdId == householdId)
             .OrderBy(x => x.Type).ThenBy(x => x.ExpectedDay).ThenBy(x => x.Name)
@@ -119,7 +119,7 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
         var fixedExpenses = entries.Where(x => x.Type == ForecastEntryType.FixedExpense).Sum(x => x.Amount);
 
         var officialInvoices = await dbContext.Invoices.AsNoTracking().Where(x =>
-                x.HouseholdId == householdId && x.DueDate <= projectionThrough &&
+                x.HouseholdId == householdId && x.DueDate <= invoiceLookupThrough &&
                 x.Status != InvoiceStatus.Paid && x.Status != InvoiceStatus.Canceled)
             .Select(x => new { x.DueDate, Amount = x.TotalAmount })
             .ToListAsync(cancellationToken);
@@ -139,17 +139,19 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
             .ToListAsync(cancellationToken);
 
         var invoiceAmounts = officialInvoices
-            .Select(x => new { DueDate = x.DueDate < projectionStart ? projectionStart : x.DueDate, x.Amount })
+            .Select(x => new { Period = ResolveInvoiceForecastPeriod(x.DueDate, projectionStart), x.Amount })
             .Concat(formingPurchases.Select(x => new
             {
-                DueDate = EstimateFormingInvoiceDueDate(x.CompetenceDate, cardDueDays[x.CardId], today),
+                Period = ResolveInvoiceForecastPeriod(
+                    EstimateFormingInvoiceDueDate(x.CompetenceDate, cardDueDays[x.CardId], today),
+                    projectionStart),
                 Amount = x.IsRefund ? -x.Amount : x.Amount
             }))
-            .Where(x => x.DueDate <= projectionThrough)
-            .GroupBy(x => new { x.DueDate.Year, x.DueDate.Month })
+            .Where(x => x.Period <= projectionThrough)
+            .GroupBy(x => new { x.Period.Year, x.Period.Month })
             .ToDictionary(x => (x.Key.Year, x.Key.Month), x => x.Sum(item => item.Amount));
 
-        var projectedBalance = availableBalance;
+        var projectedBalance = 0m;
         var months = Enumerable.Range(0, 6).Select(index => projectionStart.AddMonths(index)).Select(period =>
         {
             var invoiceTotal = invoiceAmounts.GetValueOrDefault((period.Year, period.Month));
@@ -162,10 +164,17 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
 
         return new BalanceForecastAnalysis(
             new BalanceForecastSummary(
-                availableBalance, salary, extraIncome, fixedExpenses,
+                salary, extraIncome, fixedExpenses,
                 months.Sum(x => x.CardInvoices), projectedBalance),
             months,
             entries);
+    }
+
+    private static DateOnly ResolveInvoiceForecastPeriod(DateOnly dueDate, DateOnly projectionStart)
+    {
+        var dueMonth = new DateOnly(dueDate.Year, dueDate.Month, 1);
+        var statementMonth = dueMonth.AddMonths(-1);
+        return statementMonth < projectionStart ? projectionStart : statementMonth;
     }
 
     private static DateOnly EstimateFormingInvoiceDueDate(DateOnly competenceDate, int dueDay, DateOnly today)
