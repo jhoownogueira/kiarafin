@@ -104,17 +104,28 @@ public sealed class PluggyClient(HttpClient httpClient, IOptions<PluggyOptions> 
 
     private async Task<JsonDocument?> GetAsync(string path, CancellationToken ct, bool allowNotFound = false)
     {
-        for (var attempt = 0; attempt < 2; attempt++)
+        try
         {
-            var key = await GetApiKeyAsync(attempt > 0, ct);
-            using var request = new HttpRequestMessage(HttpMethod.Get, path); request.Headers.Add("X-API-KEY", key);
-            using var response = await httpClient.SendAsync(request, ct);
-            if (response.StatusCode == HttpStatusCode.Unauthorized && attempt == 0) continue;
-            if (allowNotFound && response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden) return null;
-            if (!response.IsSuccessStatusCode) throw new PluggyUnavailableException($"Pluggy retornou HTTP {(int)response.StatusCode}.");
-            await using var stream = await response.Content.ReadAsStreamAsync(ct);
-            try { return await JsonDocument.ParseAsync(stream, cancellationToken: ct); }
-            catch (JsonException) { throw new PluggyIncompleteResponseException("Resposta JSON inválida da Pluggy."); }
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                var key = await GetApiKeyAsync(attempt > 0, ct);
+                using var request = new HttpRequestMessage(HttpMethod.Get, path); request.Headers.Add("X-API-KEY", key);
+                using var response = await httpClient.SendAsync(request, ct);
+                if (response.StatusCode == HttpStatusCode.Unauthorized && attempt == 0) continue;
+                if (allowNotFound && response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden) return null;
+                if (!response.IsSuccessStatusCode) throw new PluggyUnavailableException($"Pluggy retornou HTTP {(int)response.StatusCode}.");
+                await using var stream = await response.Content.ReadAsStreamAsync(ct);
+                try { return await JsonDocument.ParseAsync(stream, cancellationToken: ct); }
+                catch (JsonException) { throw new PluggyIncompleteResponseException("Resposta JSON inválida da Pluggy."); }
+            }
+        }
+        catch (HttpRequestException)
+        {
+            throw new PluggyUnavailableException("Não foi possível acessar a API da Pluggy.");
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new PluggyUnavailableException("A API da Pluggy demorou demais para responder.");
         }
         throw new PluggyUnavailableException("Não foi possível autenticar na Pluggy.");
     }
@@ -126,12 +137,19 @@ public sealed class PluggyClient(HttpClient httpClient, IOptions<PluggyOptions> 
         try
         {
             if (!force && _apiKey is not null && _apiKeyExpiresAtUtc > DateTime.UtcNow.AddMinutes(2)) return _apiKey;
-            using var response = await httpClient.PostAsJsonAsync("auth", new { clientId = _options.ClientId, clientSecret = _options.ClientSecret }, Json, ct);
-            if (!response.IsSuccessStatusCode) throw new PluggyUnavailableException("Falha de autenticação na Pluggy.");
-            using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
-            if (!doc.RootElement.TryGetProperty("apiKey", out var key) || string.IsNullOrWhiteSpace(key.GetString()))
-                throw new PluggyIncompleteResponseException("A autenticação Pluggy não retornou apiKey.");
-            _apiKey = key.GetString(); _apiKeyExpiresAtUtc = DateTime.UtcNow.AddMinutes(110); return _apiKey!;
+            try
+            {
+                using var response = await httpClient.PostAsJsonAsync("auth", new { clientId = _options.ClientId, clientSecret = _options.ClientSecret }, Json, ct);
+                if (!response.IsSuccessStatusCode) throw new PluggyUnavailableException("Falha de autenticação na Pluggy.");
+                using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                if (!doc.RootElement.TryGetProperty("apiKey", out var key) || string.IsNullOrWhiteSpace(key.GetString()))
+                    throw new PluggyIncompleteResponseException("A autenticação Pluggy não retornou apiKey.");
+                _apiKey = key.GetString(); _apiKeyExpiresAtUtc = DateTime.UtcNow.AddMinutes(110); return _apiKey!;
+            }
+            catch (JsonException)
+            {
+                throw new PluggyIncompleteResponseException("Resposta de autenticação inválida da Pluggy.");
+            }
         }
         finally { _authLock.Release(); }
     }

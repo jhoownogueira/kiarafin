@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using KiaraFin.Api.Features.Pluggy;
 
 namespace KiaraFin.Api.Common.Exceptions;
 
@@ -23,6 +24,9 @@ public sealed class GlobalExceptionHandler(
             ConflictException => (409, "Conflito", exception.Message),
             DbUpdateConcurrencyException => (409, "Conflito", "Os dados foram alterados por outra operação. Tente novamente."),
             DbUpdateException => (409, "Conflito", "Não foi possível concluir a operação devido a um conflito de dados."),
+            PluggyConsentExpiredException => (409, "Consentimento expirado", exception.Message),
+            PluggyIncompleteResponseException => (502, "Resposta incompleta da Pluggy", exception.Message),
+            PluggyUnavailableException => (503, "Pluggy indisponível", exception.Message),
             _ => (500, "Erro inesperado", "Ocorreu um erro inesperado.")
         };
 

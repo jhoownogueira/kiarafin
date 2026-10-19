@@ -80,6 +80,29 @@ public sealed class PluggyClientTests
         Assert.Empty(snapshot.CreditCardBills);
     }
 
+    [Fact]
+    public async Task Network_failure_is_reported_as_pluggy_unavailable()
+    {
+        var client = CreateClient(new ThrowingHandler(new HttpRequestException("sensitive network detail")));
+
+        var error = await Assert.ThrowsAsync<PluggyUnavailableException>(() =>
+            client.ReadCompleteSnapshotAsync("item-1", default));
+
+        Assert.Equal("Não foi possível acessar a API da Pluggy.", error.Message);
+        Assert.DoesNotContain("sensitive", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Invalid_authentication_json_is_reported_as_incomplete_response()
+    {
+        var handler = new DelegateHandler(_ => Response(HttpStatusCode.OK, "not-json"));
+
+        var error = await Assert.ThrowsAsync<PluggyIncompleteResponseException>(() =>
+            CreateClient(handler).ReadCompleteSnapshotAsync("item-1", default));
+
+        Assert.Contains("autenticação inválida", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static PluggyClient CreateClient(HttpMessageHandler handler)
     {
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.pluggy.test/") };
@@ -107,5 +130,11 @@ public sealed class PluggyClientTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(response(request));
+    }
+
+    private sealed class ThrowingHandler(Exception exception) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromException<HttpResponseMessage>(exception);
     }
 }
