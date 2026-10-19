@@ -138,7 +138,7 @@ frontend/
 | Accounts | Contas e saldo de caixa |
 | Categories | Classificação estável do histórico |
 | Transactions | Receitas, despesas e transferências |
-| RecurringTransactions | Modelos e ocorrências mensais |
+| Forecasts | Premissas mensais isoladas dos lançamentos |
 | Installments | Divisão, compromisso e parcelas |
 | CreditCards | Compras, ciclos, faturas e pagamentos |
 | Dashboard | Visões agregadas por período |
@@ -159,7 +159,7 @@ Os grupos abaixo estão implementados. Os recursos financeiros usam a rota base
 | `/api/households/{householdId}/accounts` | CRUD, saldo e histórico |
 | `/api/households/{householdId}/categories` | listagem e CRUD de categorias próprias |
 | `/api/households/{householdId}/transactions` | CRUD, liquidação, cancelamento e transferência |
-| `/api/households/{householdId}/recurring-transactions` | CRUD e geração idempotente |
+| `/api/households/{householdId}/forecasts` | CRUD de premissas mensais |
 | `/api/households/{householdId}/installments` | criação e consulta de parcelas |
 | `/api/households/{householdId}/credit-cards` | CRUD, compras, faturas e pagamentos |
 | `/api/households/{householdId}/dashboard` | resumo por mês e projeções |
@@ -169,7 +169,7 @@ OpenAPI documentará os contratos concretos da implementação.
 
 ## Testes
 
-- A suíte xUnit cobre calendário de cartão, rateio de centavos, recorrências,
+- A suíte xUnit cobre calendário de cartão, rateio de centavos, previsões,
   saldo, projeção, autenticação e isolamento por `Household`.
 - O teste de integração aceita uma conexão PostgreSQL isolada via
   `KIARAFIN_TEST_CONNECTION` e valida migration e precisão monetária.

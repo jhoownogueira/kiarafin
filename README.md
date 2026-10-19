@@ -5,7 +5,7 @@ em desenvolvimento e terá como primeiro cenário o compartilhamento de um núcl
 financeiro (`Household`) por duas pessoas.
 
 > Status: MVP funcional. Autenticação, núcleo familiar, contas, categorias,
-> lançamentos, recorrências, parcelas, cartões, dashboard e relatórios usam a API
+> lançamentos, previsões, parcelas, cartões, dashboard e relatórios usam a API
 > e o PostgreSQL reais. Consulte o roadmap para limitações e evoluções planejadas.
 
 O cadastro de novos usuários está permanentemente desativado no backend. Contas já existentes
@@ -176,7 +176,7 @@ Em desenvolvimento, a especificação OpenAPI exposta pela API é a fonte de ver
 - `/api/households/{householdId}/accounts`: contas, saldos e histórico.
 - `/api/households/{householdId}/categories`: categorias padrão e personalizadas.
 - `/api/households/{householdId}/transactions`: receitas, despesas, cancelamentos e transferências.
-- `/api/households/{householdId}/recurring-transactions`: recorrências e geração mensal.
+- `/api/households/{householdId}/forecasts`: salários, rendas extras e contas fixas previstas.
 - `/api/households/{householdId}/installments`: planos e parcelas futuras.
 - `/api/households/{householdId}/credit-cards`: cartões, compras, faturas e pagamento integral.
 - `/api/households/{householdId}/dashboard`: indicadores, gráficos e vencimentos.
@@ -191,7 +191,7 @@ autorizar acesso.
 - [x] Fundação: arquitetura modular, EF Core, PostgreSQL e migration inicial.
 - [x] Autenticação: JWT, refresh token rotativo, sessão e núcleo familiar.
 - [x] Financeiro: contas, categorias, transações e transferências.
-- [x] Planejamento: recorrências, parcelas, cartões e faturas com pagamento integral.
+- [x] Planejamento: previsão de saldo, parcelas, cartões e faturas com pagamento integral.
 - [x] Experiência: dashboard, relatórios, responsividade e modos claro/escuro.
 - [x] Qualidade: testes críticos, revisão de segurança e documentação OpenAPI.
 - [x] Open Finance: importação e sincronização automática via Meu Pluggy.

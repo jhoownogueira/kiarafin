@@ -1,4 +1,5 @@
 using KiaraFin.Api.Features.Finance;
+using KiaraFin.Api.Features.Forecasts;
 
 namespace KiaraFin.Api.Features.Dashboard;
 
@@ -24,6 +25,35 @@ public sealed record DashboardInvoiceItem(
 public sealed record DashboardCardItem(
     Guid Id, string Name, string? Color, decimal? TotalLimit, decimal? UsedLimit, decimal? AvailableLimit);
 
+public sealed record BalanceForecastSummary(
+    decimal StartingBalance,
+    decimal MonthlySalary,
+    decimal MonthlyExtraIncome,
+    decimal MonthlyFixedExpenses,
+    decimal KnownCardInvoices,
+    decimal ProjectedBalance);
+
+public sealed record BalanceForecastMonth(
+    string Period,
+    decimal Salary,
+    decimal ExtraIncome,
+    decimal FixedExpenses,
+    decimal CardInvoices,
+    decimal Net,
+    decimal ProjectedBalance);
+
+public sealed record BalanceForecastEntry(
+    Guid Id,
+    string Name,
+    ForecastEntryType Type,
+    decimal Amount,
+    int ExpectedDay);
+
+public sealed record BalanceForecastAnalysis(
+    BalanceForecastSummary Summary,
+    IReadOnlyList<BalanceForecastMonth> Months,
+    IReadOnlyList<BalanceForecastEntry> Entries);
+
 public sealed record DashboardResponse(
     string Period,
     DashboardIndicators Indicators,
@@ -34,4 +64,5 @@ public sealed record DashboardResponse(
     IReadOnlyList<UpcomingDueItem> UpcomingDue,
     IReadOnlyList<LatestTransactionItem> LatestTransactions,
     IReadOnlyList<DashboardInvoiceItem> UpcomingInvoices,
-    IReadOnlyList<DashboardCardItem> Cards);
+    IReadOnlyList<DashboardCardItem> Cards,
+    BalanceForecastAnalysis BalanceForecast);

@@ -1,6 +1,7 @@
 using KiaraFin.Api.Features.Identity;
 using KiaraFin.Api.Features.Finance;
 using KiaraFin.Api.Features.Pluggy;
+using KiaraFin.Api.Features.Forecasts;
 using Microsoft.EntityFrameworkCore;
 
 namespace KiaraFin.Api.Data;
@@ -26,6 +27,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ExternalTransactionMapping> ExternalTransactionMappings => Set<ExternalTransactionMapping>();
     public DbSet<FinancialIntegrationSync> FinancialIntegrationSyncs => Set<FinancialIntegrationSync>();
     public DbSet<PluggySyncJob> PluggySyncJobs => Set<PluggySyncJob>();
+    public DbSet<ForecastEntry> ForecastEntries => Set<ForecastEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -3,6 +3,7 @@ using KiaraFin.Api.Common;
 using KiaraFin.Api.Common.Exceptions;
 using KiaraFin.Api.Data;
 using KiaraFin.Api.Features.Finance;
+using KiaraFin.Api.Features.Forecasts;
 using KiaraFin.Api.Features.Households;
 using Microsoft.EntityFrameworkCore;
 
@@ -63,10 +64,6 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
             .Concat(invoicesForProjection.Select(x =>
                 new ProjectionEntry(x.TotalAmount, ProjectionEntryKind.InvoiceDue, x.DueDate)))
             .ToList();
-        await AddMissingRecurrencesAsync(
-            householdId, projectionStart, monthEnd,
-            pending.Where(x => x.RecurringTransactionId != null).Select(x => x.RecurringTransactionId!.Value).ToHashSet(),
-            projectionEntries, cancellationToken);
         var projection = FinancialProjectionCalculator.Calculate(availableBalance, monthEnd, projectionEntries);
 
         var upcomingBills = await dbContext.FinancialTransactions.AsNoTracking().CountAsync(x =>
@@ -94,33 +91,90 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
         var latest = await LatestAsync(householdId, today, cancellationToken);
         var invoiceItems = await InvoiceItemsAsync(householdId, today, cancellationToken);
         var cards = await CardItemsAsync(householdId, cancellationToken);
+        var balanceForecast = await BalanceForecastAsync(
+            householdId, today, availableBalance, cancellationToken);
 
         return new DashboardResponse(
             monthStart.ToString("yyyy-MM", CultureInfo.InvariantCulture), indicators,
-            incomeExpenses, categories, balances, forecast, upcoming, latest, invoiceItems, cards);
+            incomeExpenses, categories, balances, forecast, upcoming, latest, invoiceItems, cards,
+            balanceForecast);
     }
 
-    private async Task AddMissingRecurrencesAsync(
-        Guid householdId, DateOnly from, DateOnly to, HashSet<Guid> generatedIds,
-        List<ProjectionEntry> entries, CancellationToken cancellationToken)
+    private async Task<BalanceForecastAnalysis> BalanceForecastAsync(
+        Guid householdId,
+        DateOnly today,
+        decimal availableBalance,
+        CancellationToken cancellationToken)
     {
-        var rules = await dbContext.RecurringTransactions.AsNoTracking().Where(x =>
-                x.HouseholdId == householdId && x.Status == RecurringTransactionStatus.Active &&
-                x.StartDate <= to && (x.EndDate == null || x.EndDate >= from))
-            .Select(x => new { x.Id, x.Type, x.ExpectedAmount, x.DueDay })
+        var projectionStart = new DateOnly(today.Year, today.Month, 1);
+        var projectionThrough = projectionStart.AddMonths(6).AddDays(-1);
+        var entries = await dbContext.ForecastEntries.AsNoTracking()
+            .Where(x => x.HouseholdId == householdId)
+            .OrderBy(x => x.Type).ThenBy(x => x.ExpectedDay).ThenBy(x => x.Name)
+            .Select(x => new BalanceForecastEntry(x.Id, x.Name, x.Type, x.Amount, x.ExpectedDay))
             .ToListAsync(cancellationToken);
-        foreach (var rule in rules.Where(x => !generatedIds.Contains(x.Id)))
+
+        var salary = entries.Where(x => x.Type == ForecastEntryType.Salary).Sum(x => x.Amount);
+        var extraIncome = entries.Where(x => x.Type == ForecastEntryType.ExtraIncome).Sum(x => x.Amount);
+        var fixedExpenses = entries.Where(x => x.Type == ForecastEntryType.FixedExpense).Sum(x => x.Amount);
+
+        var officialInvoices = await dbContext.Invoices.AsNoTracking().Where(x =>
+                x.HouseholdId == householdId && x.DueDate <= projectionThrough &&
+                x.Status != InvoiceStatus.Paid && x.Status != InvoiceStatus.Canceled)
+            .Select(x => new { x.DueDate, Amount = x.TotalAmount })
+            .ToListAsync(cancellationToken);
+
+        var cards = await dbContext.CreditCards.AsNoTracking().Where(x =>
+                x.HouseholdId == householdId && x.Status == CreditCardStatus.Active &&
+                x.DueDay != null)
+            .Select(x => new { x.Id, DueDay = x.DueDay!.Value })
+            .ToListAsync(cancellationToken);
+        var cardDueDays = cards.ToDictionary(x => x.Id, x => x.DueDay);
+        var cardIds = cards.Select(x => x.Id).ToList();
+        var formingPurchases = await dbContext.FinancialTransactions.AsNoTracking().Where(x =>
+                x.HouseholdId == householdId && x.CreditCardId != null && x.InvoiceId == null &&
+                x.InstitutionControlled && x.Status == FinancialTransactionStatus.Pending &&
+                cardIds.Contains(x.CreditCardId.Value))
+            .Select(x => new { CardId = x.CreditCardId!.Value, x.CompetenceDate, x.Amount, x.IsRefund })
+            .ToListAsync(cancellationToken);
+
+        var invoiceAmounts = officialInvoices
+            .Select(x => new { DueDate = x.DueDate < projectionStart ? projectionStart : x.DueDate, x.Amount })
+            .Concat(formingPurchases.Select(x => new
+            {
+                DueDate = EstimateFormingInvoiceDueDate(x.CompetenceDate, cardDueDays[x.CardId], today),
+                Amount = x.IsRefund ? -x.Amount : x.Amount
+            }))
+            .Where(x => x.DueDate <= projectionThrough)
+            .GroupBy(x => new { x.DueDate.Year, x.DueDate.Month })
+            .ToDictionary(x => (x.Key.Year, x.Key.Month), x => x.Sum(item => item.Amount));
+
+        var projectedBalance = availableBalance;
+        var months = Enumerable.Range(0, 6).Select(index => projectionStart.AddMonths(index)).Select(period =>
         {
-            var dueDate = MonthlyDateCalculator.Resolve(to.Year, to.Month, rule.DueDay);
-            if (dueDate < from || dueDate > to)
-                continue;
-            entries.Add(new ProjectionEntry(
-                rule.ExpectedAmount,
-                rule.Type == FinancialTransactionType.Income
-                    ? ProjectionEntryKind.ExpectedIncome
-                    : ProjectionEntryKind.PendingExpense,
-                dueDate));
-        }
+            var invoiceTotal = invoiceAmounts.GetValueOrDefault((period.Year, period.Month));
+            var net = salary + extraIncome - fixedExpenses - invoiceTotal;
+            projectedBalance += net;
+            return new BalanceForecastMonth(
+                period.ToString("yyyy-MM", CultureInfo.InvariantCulture), salary, extraIncome,
+                fixedExpenses, invoiceTotal, net, projectedBalance);
+        }).ToList();
+
+        return new BalanceForecastAnalysis(
+            new BalanceForecastSummary(
+                availableBalance, salary, extraIncome, fixedExpenses,
+                months.Sum(x => x.CardInvoices), projectedBalance),
+            months,
+            entries);
+    }
+
+    private static DateOnly EstimateFormingInvoiceDueDate(DateOnly competenceDate, int dueDay, DateOnly today)
+    {
+        var reference = competenceDate > today ? competenceDate : today;
+        var dueDate = MonthlyDateCalculator.Resolve(reference.Year, reference.Month, dueDay);
+        return dueDate >= reference
+            ? dueDate
+            : MonthlyDateCalculator.Resolve(reference.AddMonths(1).Year, reference.AddMonths(1).Month, dueDay);
     }
 
     private async Task<IReadOnlyList<IncomeExpensePoint>> IncomeExpenseSeriesAsync(

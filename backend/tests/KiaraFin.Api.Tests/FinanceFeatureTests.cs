@@ -4,6 +4,7 @@ using KiaraFin.Api.Features.Accounts;
 using KiaraFin.Api.Features.Categories;
 using KiaraFin.Api.Features.CreditCardSubscriptions;
 using KiaraFin.Api.Features.Finance;
+using KiaraFin.Api.Features.Forecasts;
 using KiaraFin.Api.Features.Households;
 using KiaraFin.Api.Features.Identity;
 using KiaraFin.Api.Features.Transactions;
@@ -27,6 +28,7 @@ public sealed class FinanceFeatureTests
         Assert.Contains("account_movements", script, StringComparison.Ordinal);
         Assert.Contains("financial_transactions", script, StringComparison.Ordinal);
         Assert.Contains("credit_card_subscriptions", script, StringComparison.Ordinal);
+        Assert.Contains("forecast_entries", script, StringComparison.Ordinal);
         Assert.Contains("CardSubscriptionId", script, StringComparison.Ordinal);
         Assert.Contains("numeric(18,2)", script, StringComparison.OrdinalIgnoreCase);
     }

@@ -688,6 +688,45 @@ namespace KiaraFin.Api.Data.Migrations
                     b.ToTable("recurring_transactions", (string)null);
                 });
 
+            modelBuilder.Entity("KiaraFin.Api.Features.Forecasts.ForecastEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ExpectedDay")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "Type");
+
+                    b.ToTable("forecast_entries", (string)null);
+                });
+
             modelBuilder.Entity("KiaraFin.Api.Features.Identity.Household", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1376,6 +1415,15 @@ namespace KiaraFin.Api.Data.Migrations
                     b.HasOne("KiaraFin.Api.Features.Identity.User", null)
                         .WithMany()
                         .HasForeignKey("ResponsibleUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Forecasts.ForecastEntry", b =>
+                {
+                    b.HasOne("KiaraFin.Api.Features.Identity.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

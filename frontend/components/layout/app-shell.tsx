@@ -23,7 +23,7 @@ const navigation = [
   { label: "Lançamentos", href: "/transacoes", icon: ReceiptText },
   { label: "Categorias", href: "/categorias", icon: Tags },
   { label: "Família", href: "/familia", icon: UsersRound },
-  { label: "Recorrências", href: "/recorrencias", icon: CalendarClock },
+  { label: "Previsões", href: "/previsoes", icon: CalendarClock },
   { label: "Cartões", href: "/cartoes", icon: CreditCard },
   { label: "Relatórios", href: "/relatorios", icon: BarChart3 },
 ] as const

@@ -28,9 +28,6 @@ export const categoryService = {
 export const transactionService = {
   async list(householdId: string, filters: TransactionFilters, pageSize = 20) { const { data } = await api.get<PagedResponse<Transaction>>(`${root(householdId)}/transactions`, { params: { ...filters, status: filters.status || undefined, pageSize } }); return data },
   async listMonth(householdId: string, filters: TransactionFilters) {
-    const [year, month] = (filters.from ?? "").split("-").map(Number)
-    await api.post(`${root(householdId)}/recurring-transactions/generate/${year}/${month}`)
-
     const firstPage = await transactionService.list(householdId, { ...filters, page: 1 }, 100)
     if (firstPage.totalPages <= 1) return firstPage
 
