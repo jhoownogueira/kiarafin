@@ -83,7 +83,7 @@ Use esse runner apenas para este repositório confiável. Pull requests executam
 somente o job de CI hospedado pelo GitHub; o job no servidor roda apenas para
 `main` ou por disparo manual.
 
-## 3. Repository secrets do GitHub
+## 3. Secrets e variables do GitHub
 
 Abra:
 
@@ -98,6 +98,27 @@ Adicione estes repository secrets:
 | `POSTGRES_PASSWORD` | Senha forte do usuário PostgreSQL |
 | `JWT_KEY` | Chave aleatória com pelo menos 32 bytes |
 | `PUBLIC_ORIGIN` | URL pública exata, por exemplo `https://financas.exemplo.com.br` |
+| `PLUGGY_CLIENT_ID` | Client ID da aplicação Pluggy |
+| `PLUGGY_CLIENT_SECRET` | Client Secret da aplicação Pluggy |
+| `PLUGGY_WEBHOOK_SECRET` | Segredo aleatório enviado no cabeçalho configurado do webhook |
+
+Os três secrets Pluggy podem ser cadastrados antes da ativação; o pipeline só
+os exige quando `PLUGGY_ENABLED` for `true`. O workflow não imprime seus
+valores nem os envia ao frontend ou ao container de migrations.
+
+Na aba **Variables**, cadastre:
+
+| Variable | Valor |
+| --- | --- |
+| `PLUGGY_ENABLED` | `false` inicialmente; altere para `true` somente após validar toda a configuração |
+| `PLUGGY_ITEM_ID` | Item previamente autorizado no Meu Pluggy |
+| `PLUGGY_BASE_URL` | Opcional; padrão `https://api.pluggy.ai` |
+| `PLUGGY_AUTHORIZED_EMAIL` | `jhoownogueira@outlook.com` |
+| `PLUGGY_SYNC_INTERVAL_HOURS` | `24` |
+
+O Item ID identifica a conexão e fica em Variables; Client ID, Client Secret e
+o segredo do webhook são credenciais e ficam em Secrets. `PLUGGY_ENABLED` tem
+valor padrão `false`, inclusive quando a variable não existe.
 
 Gere valores fortes no Ubuntu:
 
@@ -148,6 +169,12 @@ docker compose --env-file .env.production \
 
 O serviço `migrate` também é executado como dependência antes da API. Repetir a
 operação é seguro: o EF aplica somente migrations ainda pendentes.
+
+As credenciais Pluggy são injetadas apenas no serviço `api`. O serviço
+`migrate` não recebe essas credenciais e não autentica na Pluggy, não inicia
+sincronizações e não altera dados financeiros durante o deploy. Habilitar a
+configuração no runtime também não substitui dados por conta própria: a primeira
+importação exige a confirmação explícita no fluxo autenticado do KiaraFin.
 
 Valide:
 
@@ -220,6 +247,11 @@ O workflow `.github/workflows/ci-cd.yml` realiza:
 5. aplicação explícita das migrations;
 6. subida da API e do frontend;
 7. validação HTTP das portas `3334` e `3333`.
+
+Quando a integração está habilitada, o workflow também valida a presença das
+credenciais, do Item ID, do proprietário autorizado e de um intervalo positivo.
+Ele apenas disponibiliza a configuração ao runtime; não chama endpoints Pluggy,
+não executa sincronização e não aciona a substituição inicial.
 
 O deploy também pode ser iniciado em **Actions > KiaraFin CI/CD > Run
 workflow**. Commits de pull requests nunca executam comandos Docker no servidor

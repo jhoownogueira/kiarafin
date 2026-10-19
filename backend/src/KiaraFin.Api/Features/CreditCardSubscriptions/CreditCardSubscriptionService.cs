@@ -26,6 +26,8 @@ public sealed class CreditCardSubscriptionService(AppDbContext dbContext, ICurre
         CancellationToken cancellationToken)
     {
         var card = await RequireCardAsync(householdId, cardId, cancellationToken);
+        if (card.InstitutionControlled)
+            throw new ConflictException("As assinaturas deste cartão são sincronizadas pela instituição financeira.");
         if (card.Status != CreditCardStatus.Active)
             throw new ConflictException("Não é possível criar uma assinatura em um cartão inativo.");
         await ValidateReferencesAsync(householdId, request.CategoryId, request.ResponsibleUserId, cancellationToken);
@@ -96,6 +98,8 @@ public sealed class CreditCardSubscriptionService(AppDbContext dbContext, ICurre
         Guid householdId, Guid cardId, int year, int month, CancellationToken cancellationToken)
     {
         var card = await RequireCardAsync(householdId, cardId, cancellationToken);
+        if (card.InstitutionControlled)
+            throw new ConflictException("As assinaturas deste cartão são sincronizadas pela instituição financeira.");
         if (card.Status != CreditCardStatus.Active)
             throw new ConflictException("Não é possível gerar assinaturas para um cartão inativo.");
         if (year is < 2000 or > 2200 || month is < 1 or > 12)
@@ -131,7 +135,7 @@ public sealed class CreditCardSubscriptionService(AppDbContext dbContext, ICurre
                         activeInvoiceIds.Contains(x.InvoiceId.Value) &&
                         x.Status != FinancialTransactionStatus.Canceled)
             .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
-        if (committed + toGenerate.Sum(x => x.Subscription.Amount) > card.TotalLimit)
+        if (committed + toGenerate.Sum(x => x.Subscription.Amount) > card.TotalLimit!.Value)
             throw new ConflictException("As assinaturas do mês excedem o limite disponível do cartão.");
 
         var loadedInvoices = new Dictionary<DateOnly, Invoice>();
@@ -139,7 +143,7 @@ public sealed class CreditCardSubscriptionService(AppDbContext dbContext, ICurre
         foreach (var occurrence in toGenerate)
         {
             var cycle = InvoiceCycleCalculator.ForPurchase(
-                occurrence.ChargeDate, card.ClosingDay, card.DueDay);
+                occurrence.ChargeDate, card.ClosingDay!.Value, card.DueDay!.Value);
             if (!loadedInvoices.TryGetValue(cycle.ClosingDate, out var invoice))
             {
                 invoice = await dbContext.Invoices.SingleOrDefaultAsync(

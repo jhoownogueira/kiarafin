@@ -34,7 +34,10 @@ public sealed record AccountResponse(
     decimal Income,
     decimal Expenses,
     Guid ResponsibleUserId,
-    bool IsActive);
+    bool IsActive,
+    string? SourceProvider,
+    string? ExternalId,
+    bool InstitutionControlled);
 
 public sealed record AccountMovementResponse(
     Guid Id,

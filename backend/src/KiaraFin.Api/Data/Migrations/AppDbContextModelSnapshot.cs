@@ -124,11 +124,15 @@ namespace KiaraFin.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("AvailableLimit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<string>("Brand")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
-                    b.Property<int>("ClosingDay")
+                    b.Property<int?>("ClosingDay")
                         .HasColumnType("integer");
 
                     b.Property<string>("Color")
@@ -138,11 +142,19 @@ namespace KiaraFin.Api.Data.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("DefaultPaymentAccountId")
+                    b.Property<decimal?>("CurrentBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("DefaultPaymentAccountId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("DueDay")
+                    b.Property<int?>("DueDay")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
 
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
@@ -150,6 +162,9 @@ namespace KiaraFin.Api.Data.Migrations
                     b.Property<string>("Institution")
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
+
+                    b.Property<bool>("InstitutionControlled")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -159,12 +174,16 @@ namespace KiaraFin.Api.Data.Migrations
                     b.Property<Guid>("ResponsibleUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SourceProvider")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<decimal>("TotalLimit")
+                    b.Property<decimal?>("TotalLimit")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
@@ -178,6 +197,9 @@ namespace KiaraFin.Api.Data.Migrations
                     b.HasIndex("ResponsibleUserId");
 
                     b.HasIndex("HouseholdId", "Status");
+
+                    b.HasIndex("SourceProvider", "ExternalId")
+                        .IsUnique();
 
                     b.ToTable("credit_cards", (string)null);
                 });
@@ -260,6 +282,10 @@ namespace KiaraFin.Api.Data.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
 
@@ -278,6 +304,9 @@ namespace KiaraFin.Api.Data.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<bool>("InstitutionControlled")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -288,6 +317,10 @@ namespace KiaraFin.Api.Data.Migrations
 
                     b.Property<Guid>("ResponsibleUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("SourceProvider")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -302,6 +335,9 @@ namespace KiaraFin.Api.Data.Migrations
                     b.HasIndex("ResponsibleUserId");
 
                     b.HasIndex("HouseholdId", "IsActive");
+
+                    b.HasIndex("SourceProvider", "ExternalId")
+                        .IsUnique();
 
                     b.ToTable("financial_accounts", (string)null);
                 });
@@ -352,6 +388,10 @@ namespace KiaraFin.Api.Data.Migrations
                     b.Property<DateOnly>("DueDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
 
@@ -364,8 +404,14 @@ namespace KiaraFin.Api.Data.Migrations
                     b.Property<Guid?>("InstallmentPlanId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("InstitutionControlled")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid?>("InvoiceId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsRefund")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
@@ -384,6 +430,10 @@ namespace KiaraFin.Api.Data.Migrations
 
                     b.Property<DateOnly?>("SettledDate")
                         .HasColumnType("date");
+
+                    b.Property<string>("SourceProvider")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -422,6 +472,9 @@ namespace KiaraFin.Api.Data.Migrations
                     b.HasIndex("InvoiceId", "Status");
 
                     b.HasIndex("RecurringTransactionId", "DueDate")
+                        .IsUnique();
+
+                    b.HasIndex("SourceProvider", "ExternalId")
                         .IsUnique();
 
                     b.HasIndex("HouseholdId", "DueDate", "Status");
@@ -498,7 +551,7 @@ namespace KiaraFin.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateOnly>("ClosingDate")
+                    b.Property<DateOnly?>("ClosingDate")
                         .HasColumnType("date");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -507,20 +560,31 @@ namespace KiaraFin.Api.Data.Migrations
                     b.Property<Guid>("CreditCardId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateOnly>("CycleStartDate")
+                    b.Property<DateOnly?>("CycleStartDate")
                         .HasColumnType("date");
 
                     b.Property<DateOnly>("DueDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("InstitutionControlled")
+                        .HasColumnType("boolean");
 
                     b.Property<DateOnly?>("PaidDate")
                         .HasColumnType("date");
 
                     b.Property<Guid?>("PaymentTransactionId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("SourceProvider")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -541,6 +605,9 @@ namespace KiaraFin.Api.Data.Migrations
                     b.HasIndex("PaymentTransactionId");
 
                     b.HasIndex("CreditCardId", "ClosingDate")
+                        .IsUnique();
+
+                    b.HasIndex("SourceProvider", "ExternalId")
                         .IsUnique();
 
                     b.ToTable("invoices", (string)null);
@@ -808,6 +875,296 @@ namespace KiaraFin.Api.Data.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.ExternalFinancialAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("CreditCardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExternalAccountId")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid?>("FinancialAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InstitutionName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid>("IntegrationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreditCardId")
+                        .IsUnique()
+                        .HasFilter("\"CreditCardId\" IS NOT NULL");
+
+                    b.HasIndex("FinancialAccountId")
+                        .IsUnique()
+                        .HasFilter("\"FinancialAccountId\" IS NOT NULL");
+
+                    b.HasIndex("IntegrationId", "ExternalAccountId")
+                        .IsUnique();
+
+                    b.ToTable("external_financial_accounts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_external_financial_accounts_single_target", "(\"FinancialAccountId\" IS NOT NULL AND \"CreditCardId\" IS NULL) OR (\"FinancialAccountId\" IS NULL AND \"CreditCardId\" IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.ExternalTransactionMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ExternalAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExternalTransactionId")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid?>("FinancialTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("IntegrationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ProviderCode")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("ProviderId")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime?>("SourceUpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("TransactionDateTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalAccountId");
+
+                    b.HasIndex("FinancialTransactionId")
+                        .IsUnique();
+
+                    b.HasIndex("IntegrationId", "ExternalTransactionId")
+                        .IsUnique();
+
+                    b.HasIndex("IntegrationId", "ProviderId");
+
+                    b.ToTable("external_transaction_mappings", (string)null);
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.FinancialIntegration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AccountCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ActivatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ConsentExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("InitialImportCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ItemId")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime?>("LastAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("LastSuccessfulSyncAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("TransactionCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("Provider", "ItemId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Provider")
+                        .IsUnique();
+
+                    b.ToTable("financial_integrations", (string)null);
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.FinancialIntegrationSync", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DeletedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("InsertedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("IntegrationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool?>("Succeeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int>("UpdatedCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IntegrationId", "StartedAtUtc");
+
+                    b.ToTable("financial_integration_syncs", (string)null);
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.PluggySyncJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("AvailableAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeduplicationKey")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)");
+
+                    b.Property<Guid>("IntegrationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Payload")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeduplicationKey")
+                        .IsUnique();
+
+                    b.HasIndex("IntegrationId");
+
+                    b.HasIndex("Status", "AvailableAtUtc");
+
+                    b.ToTable("pluggy_sync_jobs", (string)null);
+                });
+
             modelBuilder.Entity("KiaraFin.Api.Features.Finance.AccountMovement", b =>
                 {
                     b.HasOne("KiaraFin.Api.Features.Finance.FinancialAccount", null)
@@ -843,8 +1200,7 @@ namespace KiaraFin.Api.Data.Migrations
                     b.HasOne("KiaraFin.Api.Features.Finance.FinancialAccount", null)
                         .WithMany()
                         .HasForeignKey("DefaultPaymentAccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("KiaraFin.Api.Features.Identity.Household", null)
                         .WithMany()
@@ -1083,6 +1439,78 @@ namespace KiaraFin.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.ExternalFinancialAccount", b =>
+                {
+                    b.HasOne("KiaraFin.Api.Features.Finance.CreditCard", null)
+                        .WithMany()
+                        .HasForeignKey("CreditCardId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("KiaraFin.Api.Features.Finance.FinancialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("FinancialAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("KiaraFin.Api.Features.Pluggy.FinancialIntegration", null)
+                        .WithMany()
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.ExternalTransactionMapping", b =>
+                {
+                    b.HasOne("KiaraFin.Api.Features.Pluggy.ExternalFinancialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ExternalAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("KiaraFin.Api.Features.Finance.FinancialTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("FinancialTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("KiaraFin.Api.Features.Pluggy.FinancialIntegration", null)
+                        .WithMany()
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.FinancialIntegration", b =>
+                {
+                    b.HasOne("KiaraFin.Api.Features.Identity.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("KiaraFin.Api.Features.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.FinancialIntegrationSync", b =>
+                {
+                    b.HasOne("KiaraFin.Api.Features.Pluggy.FinancialIntegration", null)
+                        .WithMany()
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Pluggy.PluggySyncJob", b =>
+                {
+                    b.HasOne("KiaraFin.Api.Features.Pluggy.FinancialIntegration", null)
+                        .WithMany()
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("KiaraFin.Api.Features.Identity.Household", b =>

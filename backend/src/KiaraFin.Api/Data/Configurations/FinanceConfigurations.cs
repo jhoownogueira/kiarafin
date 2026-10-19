@@ -10,6 +10,9 @@ internal static class FinanceConfigurationExtensions
     public static PropertyBuilder<decimal> IsMoney(this PropertyBuilder<decimal> property) =>
         property.HasPrecision(18, 2);
 
+    public static PropertyBuilder<decimal?> IsMoney(this PropertyBuilder<decimal?> property) =>
+        property.HasPrecision(18, 2);
+
     public static PropertyBuilder<DateTime> IsUtcInstant(this PropertyBuilder<DateTime> property) =>
         property.HasColumnType("timestamp with time zone");
 
@@ -28,11 +31,14 @@ public sealed class FinancialAccountConfiguration : IEntityTypeConfiguration<Fin
         builder.Property(x => x.Institution).HasMaxLength(120);
         builder.Property(x => x.Color).HasMaxLength(30);
         builder.Property(x => x.Icon).HasMaxLength(60);
+        builder.Property(x => x.SourceProvider).HasMaxLength(30);
+        builder.Property(x => x.ExternalId).HasMaxLength(160);
         builder.Property(x => x.InitialBalance).IsMoney();
         builder.Property(x => x.InitialBalanceDate).HasColumnType("date");
         builder.Property(x => x.CreatedAtUtc).IsUtcInstant();
         builder.Property(x => x.UpdatedAtUtc).IsUtcInstant();
         builder.HasIndex(x => new { x.HouseholdId, x.IsActive });
+        builder.HasIndex(x => new { x.SourceProvider, x.ExternalId }).IsUnique();
         builder.HasOne<Household>().WithMany().HasForeignKey(x => x.HouseholdId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.ResponsibleUserId).OnDelete(DeleteBehavior.Restrict);
     }
@@ -72,6 +78,8 @@ public sealed class FinancialTransactionConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.Scope).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.Notes).HasMaxLength(1000);
         builder.Property(x => x.ClientRequestId).HasMaxLength(100);
+        builder.Property(x => x.SourceProvider).HasMaxLength(30);
+        builder.Property(x => x.ExternalId).HasMaxLength(160);
         builder.Property(x => x.CreatedAtUtc).IsUtcInstant();
         builder.Property(x => x.UpdatedAtUtc).IsUtcInstant();
         builder.Property(x => x.CanceledAtUtc).IsUtcInstant();
@@ -82,6 +90,7 @@ public sealed class FinancialTransactionConfiguration : IEntityTypeConfiguration
         builder.HasIndex(x => new { x.CardSubscriptionId, x.CompetenceDate }).IsUnique();
         builder.HasIndex(x => new { x.InstallmentPlanId, x.InstallmentNumber }).IsUnique();
         builder.HasIndex(x => new { x.InvoiceId, x.Status });
+        builder.HasIndex(x => new { x.SourceProvider, x.ExternalId }).IsUnique();
         builder.HasOne<Household>().WithMany().HasForeignKey(x => x.HouseholdId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Category>().WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<FinancialAccount>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
@@ -147,11 +156,16 @@ public sealed class CreditCardConfiguration : IEntityTypeConfiguration<CreditCar
         builder.Property(x => x.Institution).HasMaxLength(120);
         builder.Property(x => x.Brand).HasMaxLength(40);
         builder.Property(x => x.Color).HasMaxLength(30);
+        builder.Property(x => x.SourceProvider).HasMaxLength(30);
+        builder.Property(x => x.ExternalId).HasMaxLength(160);
         builder.Property(x => x.TotalLimit).IsMoney();
+        builder.Property(x => x.CurrentBalance).IsMoney();
+        builder.Property(x => x.AvailableLimit).IsMoney();
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.CreatedAtUtc).IsUtcInstant();
         builder.Property(x => x.UpdatedAtUtc).IsUtcInstant();
         builder.HasIndex(x => new { x.HouseholdId, x.Status });
+        builder.HasIndex(x => new { x.SourceProvider, x.ExternalId }).IsUnique();
         builder.HasOne<Household>().WithMany().HasForeignKey(x => x.HouseholdId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.ResponsibleUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<FinancialAccount>().WithMany().HasForeignKey(x => x.DefaultPaymentAccountId).OnDelete(DeleteBehavior.Restrict);
@@ -172,7 +186,10 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.CreatedAtUtc).IsUtcInstant();
         builder.Property(x => x.UpdatedAtUtc).IsUtcInstant();
+        builder.Property(x => x.SourceProvider).HasMaxLength(30);
+        builder.Property(x => x.ExternalId).HasMaxLength(160);
         builder.HasIndex(x => new { x.CreditCardId, x.ClosingDate }).IsUnique();
+        builder.HasIndex(x => new { x.SourceProvider, x.ExternalId }).IsUnique();
         builder.HasOne<Household>().WithMany().HasForeignKey(x => x.HouseholdId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditCard>().WithMany().HasForeignKey(x => x.CreditCardId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<FinancialTransaction>().WithMany().HasForeignKey(x => x.PaymentTransactionId).OnDelete(DeleteBehavior.Restrict);

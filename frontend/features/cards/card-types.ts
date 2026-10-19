@@ -2,7 +2,7 @@ export type InvoiceStatus = "Upcoming" | "Open" | "Closed" | "Paid" | "Canceled"
 
 export type InvoiceSummary = {
   id: string
-  closingDate: string
+  closingDate: string | null
   dueDate: string
   totalAmount: number
   status: InvoiceStatus
@@ -22,13 +22,14 @@ export type InvoicePurchase = {
   scope: "Individual" | "Shared"
   installmentNumber: number | null
   installmentCount: number | null
+  isRefund: boolean
 }
 
 export type InvoiceDetail = {
   id: string
   creditCardId: string
-  cycleStartDate: string
-  closingDate: string
+  cycleStartDate: string | null
+  closingDate: string | null
   dueDate: string
   totalAmount: number
   status: InvoiceStatus
@@ -43,15 +44,18 @@ export type CreditCard = {
   institution: string | null
   brand: string | null
   color: string | null
-  totalLimit: number
-  usedLimit: number
-  availableLimit: number
-  closingDay: number
-  dueDay: number
+  totalLimit: number | null
+  usedLimit: number | null
+  availableLimit: number | null
+  closingDay: number | null
+  dueDay: number | null
   responsibleUserId: string
-  defaultPaymentAccountId: string
+  defaultPaymentAccountId: string | null
   status: "Active" | "Inactive"
   invoices: InvoiceSummary[]
+  sourceProvider: string | null
+  externalId: string | null
+  institutionControlled: boolean
 }
 
 export const invoiceStatusLabel: Record<InvoiceStatus, string> = {

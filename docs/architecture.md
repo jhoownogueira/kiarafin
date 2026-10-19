@@ -154,7 +154,7 @@ Os grupos abaixo estão implementados. Os recursos financeiros usam a rota base
 
 | Grupo | Operações previstas |
 | --- | --- |
-| `/api/auth` | register, login, refresh, logout, me |
+| `/api/auth` | login, refresh, logout e me; `register` permanece apenas como resposta `403` permanente |
 | `/api/households` | current, members, invites, accept invite |
 | `/api/households/{householdId}/accounts` | CRUD, saldo e histórico |
 | `/api/households/{householdId}/categories` | listagem e CRUD de categorias próprias |

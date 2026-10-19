@@ -50,7 +50,7 @@ public sealed record UpdateCreditCardPurchaseRequest(
 
 public sealed record InvoiceSummaryResponse(
     Guid Id,
-    DateOnly ClosingDate,
+    DateOnly? ClosingDate,
     DateOnly DueDate,
     decimal TotalAmount,
     InvoiceStatus Status,
@@ -59,8 +59,8 @@ public sealed record InvoiceSummaryResponse(
 public sealed record InvoiceDetailResponse(
     Guid Id,
     Guid CreditCardId,
-    DateOnly CycleStartDate,
-    DateOnly ClosingDate,
+    DateOnly? CycleStartDate,
+    DateOnly? ClosingDate,
     DateOnly DueDate,
     decimal TotalAmount,
     InvoiceStatus Status,
@@ -80,7 +80,8 @@ public sealed record InvoicePurchaseResponse(
     Guid ResponsibleUserId,
     ExpenseScope Scope,
     int? InstallmentNumber,
-    int? InstallmentCount);
+    int? InstallmentCount,
+    bool IsRefund);
 
 public sealed record CreditCardResponse(
     Guid Id,
@@ -88,14 +89,17 @@ public sealed record CreditCardResponse(
     string? Institution,
     string? Brand,
     string? Color,
-    decimal TotalLimit,
-    decimal UsedLimit,
-    decimal AvailableLimit,
-    int ClosingDay,
-    int DueDay,
+    decimal? TotalLimit,
+    decimal? UsedLimit,
+    decimal? AvailableLimit,
+    int? ClosingDay,
+    int? DueDay,
     Guid ResponsibleUserId,
-    Guid DefaultPaymentAccountId,
+    Guid? DefaultPaymentAccountId,
     CreditCardStatus Status,
-    IReadOnlyList<InvoiceSummaryResponse> Invoices);
+    IReadOnlyList<InvoiceSummaryResponse> Invoices,
+    string? SourceProvider,
+    string? ExternalId,
+    bool InstitutionControlled);
 
 public sealed record InvoicePaymentResponse(Guid InvoiceId, Guid PaymentTransactionId, InvoiceStatus Status);

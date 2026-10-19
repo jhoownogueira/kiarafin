@@ -68,10 +68,12 @@ public sealed class CreditCardService(
     {
         await RequireMembershipAsync(householdId, cancellationToken);
         var card = await FindCardAsync(householdId, id, cancellationToken);
+        if (card.InstitutionControlled)
+            throw new ConflictException("Os campos deste cartão são controlados pela instituição financeira.");
         await ValidateReferencesAsync(
             householdId, request.ResponsibleUserId, request.DefaultPaymentAccountId, cancellationToken);
         var current = await MapCardAsync(card, cancellationToken);
-        if (request.TotalLimit < current.UsedLimit)
+        if (current.UsedLimit is decimal usedLimit && request.TotalLimit < usedLimit)
             throw new ConflictException("O limite total não pode ser menor que o valor já comprometido.");
         try
         {
@@ -94,6 +96,8 @@ public sealed class CreditCardService(
     {
         await RequireMembershipAsync(householdId, cancellationToken);
         var card = await FindCardAsync(householdId, id, cancellationToken);
+        if (card.InstitutionControlled)
+            throw new ConflictException("Este cartão é controlado pela instituição financeira.");
         card.SetActive(false, DateTime.UtcNow);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -105,7 +109,9 @@ public sealed class CreditCardService(
         CancellationToken cancellationToken)
     {
         await RequireMembershipAsync(householdId, cancellationToken);
-        await FindCardAsync(householdId, cardId, cancellationToken);
+        var card = await FindCardAsync(householdId, cardId, cancellationToken);
+        if (card.InstitutionControlled)
+            throw new ConflictException("As compras deste cartão são sincronizadas pela instituição financeira.");
         var firstDate = request.FirstInstallmentDate ?? request.PurchaseDate;
         return await installmentService.CreateAsync(
             householdId,
@@ -133,6 +139,8 @@ public sealed class CreditCardService(
     {
         await RequireMembershipAsync(householdId, cancellationToken);
         var card = await FindCardAsync(householdId, cardId, cancellationToken);
+        if (card.InstitutionControlled)
+            throw new ConflictException("As compras deste cartão são sincronizadas pela instituição financeira.");
         await ValidatePurchaseReferencesAsync(
             householdId, request.CategoryId, request.ResponsibleUserId, cancellationToken);
 
@@ -153,7 +161,7 @@ public sealed class CreditCardService(
                         x.InstallmentPlanId != plan.Id &&
                         x.Status != FinancialTransactionStatus.Canceled)
             .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
-        if (committedByOtherPurchases + request.TotalAmount > card.TotalLimit)
+        if (committedByOtherPurchases + request.TotalAmount > card.TotalLimit!.Value)
             throw new ConflictException("A alteração excede o limite disponível do cartão.");
 
         var oldTotals = entries.GroupBy(x => x.InvoiceId!.Value)
@@ -191,7 +199,9 @@ public sealed class CreditCardService(
         CancellationToken cancellationToken)
     {
         await RequireMembershipAsync(householdId, cancellationToken);
-        await FindCardAsync(householdId, cardId, cancellationToken);
+        var card = await FindCardAsync(householdId, cardId, cancellationToken);
+        if (card.InstitutionControlled)
+            throw new ConflictException("As compras deste cartão são sincronizadas pela instituição financeira.");
         await using var databaseTransaction = await dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable, cancellationToken);
         var (plan, entries, invoices) = await LoadEditablePurchaseAsync(
@@ -234,7 +244,8 @@ public sealed class CreditCardService(
             x => x.Id == invoiceId && x.CreditCardId == cardId && x.HouseholdId == householdId,
             cancellationToken) ?? throw new NotFoundException("Fatura não encontrada.");
         var purchaseEntities = await dbContext.Set<FinancialTransaction>().AsNoTracking()
-            .Where(x => x.InvoiceId == invoice.Id && x.Type == FinancialTransactionType.Expense)
+            .Where(x => x.InvoiceId == invoice.Id && x.Type == FinancialTransactionType.Expense &&
+                        x.Status != FinancialTransactionStatus.Canceled)
             .OrderBy(x => x.CompetenceDate)
             .ToListAsync(cancellationToken);
         var planIds = purchaseEntities.Where(x => x.InstallmentPlanId != null)
@@ -249,7 +260,7 @@ public sealed class CreditCardService(
                 x.Id, x.InstallmentPlanId, x.CardSubscriptionId,
                 plan?.Description ?? x.Description, x.Amount,
                 plan?.TotalAmount ?? x.Amount, x.CompetenceDate, x.CategoryId!.Value,
-                x.ResponsibleUserId, x.Scope, x.InstallmentNumber, x.InstallmentCount);
+                x.ResponsibleUserId, x.Scope, x.InstallmentNumber, x.InstallmentCount, x.IsRefund);
         }).ToList();
         return new InvoiceDetailResponse(
             invoice.Id, invoice.CreditCardId, invoice.CycleStartDate, invoice.ClosingDate,
@@ -270,6 +281,8 @@ public sealed class CreditCardService(
         var invoice = await dbContext.Set<Invoice>().SingleOrDefaultAsync(
             x => x.Id == invoiceId && x.CreditCardId == cardId && x.HouseholdId == householdId,
             cancellationToken) ?? throw new NotFoundException("Fatura não encontrada.");
+        if (invoice.InstitutionControlled)
+            throw new ConflictException("Esta fatura é controlada pela instituição financeira.");
         if (invoice.Status != InvoiceStatus.Closed)
         {
             var now = DateTime.UtcNow;
@@ -300,6 +313,8 @@ public sealed class CreditCardService(
         var invoice = await dbContext.Set<Invoice>().SingleOrDefaultAsync(
             x => x.Id == invoiceId && x.CreditCardId == cardId && x.HouseholdId == householdId,
             cancellationToken) ?? throw new NotFoundException("Fatura não encontrada.");
+        if (invoice.InstitutionControlled)
+            throw new ConflictException("Esta fatura é controlada pela instituição financeira.");
         if (invoice.PaymentTransactionId is Guid previousPaymentId)
             return new InvoicePaymentResponse(invoice.Id, previousPaymentId, invoice.Status);
         if (!await dbContext.Set<FinancialAccount>().AnyAsync(
@@ -350,16 +365,21 @@ public sealed class CreditCardService(
             .Where(x => x.Status is not InvoiceStatus.Paid and not InvoiceStatus.Canceled)
             .Select(x => x.Id)
             .ToList();
-        var usedLimit = await dbContext.Set<FinancialTransaction>().AsNoTracking()
-            .Where(x => x.CreditCardId == card.Id &&
-                        x.InvoiceId != null && activeInvoiceIds.Contains(x.InvoiceId.Value) &&
-                        x.Status != FinancialTransactionStatus.Canceled)
-            .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+        decimal? usedLimit = card.InstitutionControlled
+            ? card.CurrentBalance
+            : await dbContext.Set<FinancialTransaction>().AsNoTracking()
+                .Where(x => x.CreditCardId == card.Id &&
+                            x.InvoiceId != null && activeInvoiceIds.Contains(x.InvoiceId.Value) &&
+                            x.Status != FinancialTransactionStatus.Canceled)
+                .SumAsync(x => (decimal?)(x.IsRefund ? -x.Amount : x.Amount), cancellationToken) ?? 0m;
+        var availableLimit = card.AvailableLimit ??
+            (card.TotalLimit is decimal total && usedLimit is decimal used ? total - used : null);
         return new CreditCardResponse(
             card.Id, card.Name, card.Institution, card.Brand, card.Color,
-            card.TotalLimit, usedLimit, card.TotalLimit - usedLimit,
+            card.TotalLimit, usedLimit, availableLimit,
             card.ClosingDay, card.DueDay, card.ResponsibleUserId,
-            card.DefaultPaymentAccountId, card.Status, invoices);
+            card.DefaultPaymentAccountId, card.Status, invoices,
+            card.SourceProvider, card.ExternalId, card.InstitutionControlled);
     }
 
     private async Task ValidateReferencesAsync(

@@ -15,6 +15,7 @@ using KiaraFin.Api.Features.Installments;
 using KiaraFin.Api.Features.RecurringTransactions;
 using KiaraFin.Api.Features.Reports;
 using KiaraFin.Api.Features.Transactions;
+using KiaraFin.Api.Features.Pluggy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -87,6 +88,21 @@ builder.Services.AddScoped<CreditCardService>();
 builder.Services.AddScoped<CreditCardSubscriptionService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<ReportService>();
+builder.Services.AddOptions<PluggyOptions>()
+    .Bind(builder.Configuration.GetSection(PluggyOptions.SectionName))
+    .Validate(x => !x.Enabled || (!string.IsNullOrWhiteSpace(x.ClientId) && !string.IsNullOrWhiteSpace(x.ClientSecret)
+        && !string.IsNullOrWhiteSpace(x.ItemId) && !string.IsNullOrWhiteSpace(x.WebhookSecret)),
+        "Credenciais, ItemId e segredo de webhook Pluggy são obrigatórios quando a integração está habilitada.")
+    .Validate(x => x.SyncIntervalHours is >= 1 and <= 168, "Pluggy:SyncIntervalHours inválido.")
+    .ValidateOnStart();
+builder.Services.AddHttpClient<IPluggyClient, PluggyClient>((services, client) =>
+{
+    var settings = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<PluggyOptions>>().Value;
+    client.BaseAddress = new Uri(settings.BaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+builder.Services.AddScoped<PluggyIntegrationService>();
+builder.Services.AddHostedService<PluggyBackgroundService>();
 
 var app = builder.Build();
 

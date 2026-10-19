@@ -75,6 +75,18 @@ public sealed class TransactionService(AppDbContext dbContext, HouseholdAccessSe
     {
         await access.RequireMembershipAsync(householdId, cancellationToken);
         var transaction = await FindAsync(householdId, transactionId, true, cancellationToken);
+        if (transaction.InstitutionControlled)
+        {
+            var expectedCategoryType = transaction.Type == FinancialTransactionType.Income
+                ? CategoryType.Income : CategoryType.Expense;
+            if (!await dbContext.Categories.AnyAsync(x => x.Id == request.CategoryId &&
+                    x.HouseholdId == householdId && x.IsActive && x.Type == expectedCategoryType,
+                    cancellationToken))
+                throw new AppValidationException("A categoria deve estar ativa, ter o tipo correto e pertencer ao núcleo financeiro.");
+            transaction.UpdateInstitutionMetadata(request.CategoryId, request.Notes, DateTime.UtcNow);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return Map(transaction, BusinessDate.Today());
+        }
         await ValidateReferencesAsync(householdId, request.AccountId, request.CategoryId,
             transaction.Type, request.ResponsibleUserId, cancellationToken);
         transaction.UpdatePending(request.Description, request.Amount, request.CategoryId,
@@ -90,8 +102,26 @@ public sealed class TransactionService(AppDbContext dbContext, HouseholdAccessSe
     {
         await access.RequireMembershipAsync(householdId, cancellationToken);
         var transaction = await FindAsync(householdId, transactionId, true, cancellationToken);
+        if (transaction.InstitutionControlled)
+            throw new ConflictException("A liquidação deste lançamento é controlada pela instituição.");
         transaction.Settle(request.SettledDate, DateTime.UtcNow);
         dbContext.AccountMovements.Add(CreateSettlementMovement(transaction));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Map(transaction, BusinessDate.Today());
+    }
+
+    public async Task<TransactionResponse> UpdateMetadataAsync(Guid householdId, Guid transactionId,
+        UpdateTransactionMetadataRequest request, CancellationToken cancellationToken)
+    {
+        await access.RequireMembershipAsync(householdId, cancellationToken);
+        var transaction = await FindAsync(householdId, transactionId, true, cancellationToken);
+        if (!transaction.InstitutionControlled)
+            throw new ConflictException("Este endpoint é exclusivo para metadados de lançamentos sincronizados.");
+        var expectedType = transaction.Type == FinancialTransactionType.Income ? CategoryType.Income : CategoryType.Expense;
+        if (!await dbContext.Categories.AnyAsync(x => x.Id == request.CategoryId && x.HouseholdId == householdId &&
+                x.IsActive && x.Type == expectedType, cancellationToken))
+            throw new AppValidationException("A categoria deve estar ativa, ter o tipo correto e pertencer ao núcleo financeiro.");
+        transaction.UpdateInstitutionMetadata(request.CategoryId, request.Notes, DateTime.UtcNow);
         await dbContext.SaveChangesAsync(cancellationToken);
         return Map(transaction, BusinessDate.Today());
     }
@@ -101,6 +131,8 @@ public sealed class TransactionService(AppDbContext dbContext, HouseholdAccessSe
     {
         await access.RequireMembershipAsync(householdId, cancellationToken);
         var transaction = await FindAsync(householdId, transactionId, true, cancellationToken);
+        if (transaction.InstitutionControlled)
+            throw new ConflictException("O cancelamento deste lançamento é controlado pela instituição.");
         if (transaction.Status == FinancialTransactionStatus.Canceled)
             return Map(transaction, BusinessDate.Today());
         var movement = await dbContext.AccountMovements.SingleOrDefaultAsync(
@@ -219,6 +251,7 @@ public sealed class TransactionService(AppDbContext dbContext, HouseholdAccessSe
             x.Id, x.Description, x.Amount, x.Type, status, x.CategoryId, x.AccountId,
             x.DestinationAccountId, x.CompetenceDate, x.DueDate, x.SettledDate, x.Notes,
             x.ResponsibleUserId, x.Scope, x.RecurringTransactionId, x.CardSubscriptionId,
-            x.ClientRequestId, x.CreatedAtUtc);
+            x.ClientRequestId, x.CreatedAtUtc, x.SourceProvider, x.ExternalId, x.InstitutionControlled,
+            x.IsRefund);
     }
 }

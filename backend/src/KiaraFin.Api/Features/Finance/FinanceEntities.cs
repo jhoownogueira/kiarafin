@@ -47,6 +47,24 @@ public sealed class FinancialAccount
     public bool IsActive { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
+    public string? SourceProvider { get; private set; }
+    public string? ExternalId { get; private set; }
+    public bool InstitutionControlled { get; private set; }
+
+    public void SynchronizeFromInstitution(string provider, string externalId, string name,
+        FinancialAccountType type, decimal balance, DateOnly balanceDate, string? institution, DateTime utcNow)
+    {
+        SourceProvider = FinanceGuard.RequiredText(provider, nameof(provider));
+        ExternalId = FinanceGuard.RequiredText(externalId, nameof(externalId));
+        InstitutionControlled = true;
+        Name = FinanceGuard.RequiredText(name, nameof(name));
+        Type = type;
+        InitialBalance = FinanceGuard.Money(balance, nameof(balance), allowNegative: true);
+        InitialBalanceDate = balanceDate;
+        Institution = FinanceGuard.OptionalText(institution);
+        IsActive = true;
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
 
     public void SetActive(bool isActive, DateTime utcNow)
     {
@@ -192,6 +210,107 @@ public sealed class FinancialTransaction
     public DateTime? UpdatedAtUtc { get; private set; }
     public DateTime? CanceledAtUtc { get; private set; }
     public string? ClientRequestId { get; private set; }
+    public string? SourceProvider { get; private set; }
+    public string? ExternalId { get; private set; }
+    public bool InstitutionControlled { get; private set; }
+    public bool IsRefund { get; private set; }
+
+    public void MarkInstitutionControlled(string provider, string externalId)
+    {
+        SourceProvider = FinanceGuard.RequiredText(provider, nameof(provider));
+        ExternalId = FinanceGuard.RequiredText(externalId, nameof(externalId));
+        InstitutionControlled = true;
+    }
+
+    public void SynchronizeInstitutionFields(string description, decimal amount,
+        FinancialTransactionType type, Guid? accountId, Guid? creditCardId, Guid? invoiceId,
+        DateOnly date, bool settled, bool isRefund, DateTime utcNow)
+    {
+        if (!InstitutionControlled)
+            throw new ConflictException("O lançamento não é controlado por uma instituição.");
+        if (type is FinancialTransactionType.Transfer or FinancialTransactionType.InvoicePayment)
+            throw new ArgumentException("Tipo externo sem lançamento financeiro direto.", nameof(type));
+        Description = FinanceGuard.RequiredText(description, nameof(description));
+        Amount = FinanceGuard.PositiveMoney(amount, nameof(amount));
+        Type = type;
+        AccountId = accountId;
+        CreditCardId = creditCardId;
+        InvoiceId = invoiceId;
+        IsRefund = isRefund;
+        CompetenceDate = date;
+        DueDate = date;
+        SettledDate = settled ? date : null;
+        Status = settled
+            ? type == FinancialTransactionType.Income ? FinancialTransactionStatus.Received : FinancialTransactionStatus.Paid
+            : FinancialTransactionStatus.Pending;
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
+
+    public void SetInstitutionInstallment(int? number, int? count, DateTime utcNow)
+    {
+        if (!InstitutionControlled)
+            throw new ConflictException("O lançamento não é controlado por uma instituição.");
+        if (number is null && count is null)
+        {
+            InstallmentNumber = null;
+            InstallmentCount = null;
+        }
+        else
+        {
+            if (number is null || count is null || number < 1 || count < 1 || number > count)
+                throw new ArgumentOutOfRangeException(nameof(number), "Metadados de parcelamento inválidos.");
+            InstallmentNumber = number;
+            InstallmentCount = count;
+        }
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
+
+    public static FinancialTransaction CreateInstitutionCreditCardEntry(
+        Guid householdId,
+        string description,
+        decimal amount,
+        Guid categoryId,
+        Guid creditCardId,
+        Guid? invoiceId,
+        DateOnly date,
+        Guid responsibleUserId,
+        bool settled,
+        bool isRefund)
+    {
+        FinanceGuard.NotEmpty(householdId, nameof(householdId));
+        FinanceGuard.NotEmpty(categoryId, nameof(categoryId));
+        FinanceGuard.NotEmpty(creditCardId, nameof(creditCardId));
+        FinanceGuard.NotEmpty(responsibleUserId, nameof(responsibleUserId));
+        return new FinancialTransaction
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = FinanceGuard.RequiredText(description, nameof(description)),
+            Amount = FinanceGuard.PositiveMoney(amount, nameof(amount)),
+            Type = FinancialTransactionType.Expense,
+            Status = settled ? FinancialTransactionStatus.Paid : FinancialTransactionStatus.Pending,
+            CategoryId = categoryId,
+            CreditCardId = creditCardId,
+            InvoiceId = invoiceId,
+            CompetenceDate = date,
+            DueDate = date,
+            SettledDate = settled ? date : null,
+            ResponsibleUserId = responsibleUserId,
+            Scope = ExpenseScope.Individual,
+            IsRefund = isRefund,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+    }
+
+    public void UpdateInstitutionMetadata(Guid categoryId, string? notes, DateTime utcNow)
+    {
+        if (!InstitutionControlled)
+            throw new ConflictException("O lançamento não é controlado por uma instituição.");
+        FinanceGuard.NotEmpty(categoryId, nameof(categoryId));
+        CategoryId = categoryId;
+        Notes = FinanceGuard.OptionalText(notes);
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
 
     public static FinancialTransaction CreateTransfer(
         Guid householdId,
@@ -475,6 +594,14 @@ public sealed class AccountMovement
     public DateOnly MovementDate { get; private set; }
     public int Sequence { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
+
+    public void SynchronizeFromInstitution(decimal signedAmount, AccountMovementKind kind, DateOnly date)
+    {
+        if (signedAmount == 0) throw new ArgumentOutOfRangeException(nameof(signedAmount));
+        SignedAmount = FinanceGuard.Money(signedAmount, nameof(signedAmount), allowNegative: true);
+        Kind = kind;
+        MovementDate = date;
+    }
 }
 
 public sealed class RecurringTransaction
@@ -538,6 +665,7 @@ public sealed class RecurringTransaction
     public ExpenseScope Scope { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
+
 
     public void Pause(DateTime utcNow) => ChangeStatus(RecurringTransactionStatus.Paused, utcNow);
     public void Resume(DateTime utcNow) => ChangeStatus(RecurringTransactionStatus.Active, utcNow);
@@ -629,14 +757,67 @@ public sealed class CreditCard
     public string? Institution { get; private set; }
     public string? Brand { get; private set; }
     public string? Color { get; private set; }
-    public decimal TotalLimit { get; private set; }
-    public int ClosingDay { get; private set; }
-    public int DueDay { get; private set; }
+    public decimal? TotalLimit { get; private set; }
+    public decimal? CurrentBalance { get; private set; }
+    public decimal? AvailableLimit { get; private set; }
+    public int? ClosingDay { get; private set; }
+    public int? DueDay { get; private set; }
     public Guid ResponsibleUserId { get; private set; }
-    public Guid DefaultPaymentAccountId { get; private set; }
+    public Guid? DefaultPaymentAccountId { get; private set; }
     public CreditCardStatus Status { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
+    public string? SourceProvider { get; private set; }
+    public string? ExternalId { get; private set; }
+    public bool InstitutionControlled { get; private set; }
+
+    public void MarkInstitutionControlled(string provider, string externalId)
+    {
+        SourceProvider = FinanceGuard.RequiredText(provider, nameof(provider));
+        ExternalId = FinanceGuard.RequiredText(externalId, nameof(externalId));
+        InstitutionControlled = true;
+    }
+
+    public static CreditCard CreateInstitutionControlled(
+        Guid householdId, string name, Guid responsibleUserId, string provider, string externalId,
+        string? institution, string? brand, decimal? totalLimit, decimal? currentBalance,
+        decimal? availableLimit, DateOnly? closingDate, DateOnly? dueDate, bool active)
+    {
+        FinanceGuard.NotEmpty(householdId, nameof(householdId));
+        FinanceGuard.NotEmpty(responsibleUserId, nameof(responsibleUserId));
+        return new CreditCard
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId,
+            Name = FinanceGuard.RequiredText(name, nameof(name)),
+            Institution = FinanceGuard.OptionalText(institution), Brand = FinanceGuard.OptionalText(brand),
+            TotalLimit = totalLimit is null ? null : FinanceGuard.Money(totalLimit.Value, nameof(totalLimit)),
+            CurrentBalance = currentBalance is null ? null : FinanceGuard.Money(currentBalance.Value, nameof(currentBalance), allowNegative: true),
+            AvailableLimit = availableLimit is null ? null : FinanceGuard.Money(availableLimit.Value, nameof(availableLimit), allowNegative: true),
+            ClosingDay = closingDate?.Day, DueDay = dueDate?.Day,
+            ResponsibleUserId = responsibleUserId,
+            Status = active ? CreditCardStatus.Active : CreditCardStatus.Inactive,
+            SourceProvider = FinanceGuard.RequiredText(provider, nameof(provider)),
+            ExternalId = FinanceGuard.RequiredText(externalId, nameof(externalId)),
+            InstitutionControlled = true, CreatedAtUtc = DateTime.UtcNow
+        };
+    }
+
+    public void SynchronizeFromInstitution(
+        string name, string? institution, string? brand, decimal? totalLimit,
+        decimal? currentBalance, decimal? availableLimit, DateOnly? closingDate,
+        DateOnly? dueDate, bool active, DateTime utcNow)
+    {
+        if (!InstitutionControlled)
+            throw new ConflictException("O cartão não é controlado por uma instituição.");
+        Name = FinanceGuard.RequiredText(name, nameof(name));
+        Institution = FinanceGuard.OptionalText(institution); Brand = FinanceGuard.OptionalText(brand);
+        TotalLimit = totalLimit is null ? null : FinanceGuard.Money(totalLimit.Value, nameof(totalLimit));
+        CurrentBalance = currentBalance is null ? null : FinanceGuard.Money(currentBalance.Value, nameof(currentBalance), allowNegative: true);
+        AvailableLimit = availableLimit is null ? null : FinanceGuard.Money(availableLimit.Value, nameof(availableLimit), allowNegative: true);
+        ClosingDay = closingDate?.Day; DueDay = dueDate?.Day;
+        Status = active ? CreditCardStatus.Active : CreditCardStatus.Inactive;
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
 
     public void Update(
         string name,
@@ -705,8 +886,8 @@ public sealed class Invoice
     public Guid Id { get; private set; }
     public Guid HouseholdId { get; private set; }
     public Guid CreditCardId { get; private set; }
-    public DateOnly CycleStartDate { get; private set; }
-    public DateOnly ClosingDate { get; private set; }
+    public DateOnly? CycleStartDate { get; private set; }
+    public DateOnly? ClosingDate { get; private set; }
     public DateOnly DueDate { get; private set; }
     public decimal TotalAmount { get; private set; }
     public InvoiceStatus Status { get; private set; }
@@ -714,6 +895,44 @@ public sealed class Invoice
     public DateOnly? PaidDate { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
+    public string? SourceProvider { get; private set; }
+    public string? ExternalId { get; private set; }
+    public bool InstitutionControlled { get; private set; }
+
+    public static Invoice CreateInstitutionControlled(
+        Guid householdId, Guid creditCardId, string provider, string externalId,
+        DateOnly? closingDate, DateOnly dueDate, decimal totalAmount,
+        DateOnly? paidDate, DateTime utcNow)
+    {
+        FinanceGuard.NotEmpty(householdId, nameof(householdId));
+        FinanceGuard.NotEmpty(creditCardId, nameof(creditCardId));
+        return new Invoice
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId, CreditCardId = creditCardId,
+            ClosingDate = closingDate, DueDate = dueDate,
+            TotalAmount = FinanceGuard.Money(totalAmount, nameof(totalAmount), allowNegative: true),
+            Status = paidDate is null
+                ? closingDate is not null && closingDate <= DateOnly.FromDateTime(utcNow) ? InvoiceStatus.Closed : InvoiceStatus.Open
+                : InvoiceStatus.Paid,
+            PaidDate = paidDate, SourceProvider = FinanceGuard.RequiredText(provider, nameof(provider)),
+            ExternalId = FinanceGuard.RequiredText(externalId, nameof(externalId)),
+            InstitutionControlled = true, CreatedAtUtc = utcNow
+        };
+    }
+
+    public void SynchronizeFromInstitution(DateOnly? closingDate, DateOnly dueDate,
+        decimal totalAmount, DateOnly? paidDate, DateTime utcNow)
+    {
+        if (!InstitutionControlled)
+            throw new ConflictException("A fatura não é controlada por uma instituição.");
+        ClosingDate = closingDate; DueDate = dueDate;
+        TotalAmount = FinanceGuard.Money(totalAmount, nameof(totalAmount), allowNegative: true);
+        PaidDate = paidDate;
+        Status = paidDate is null
+            ? closingDate is not null && closingDate <= DateOnly.FromDateTime(utcNow) ? InvoiceStatus.Closed : InvoiceStatus.Open
+            : InvoiceStatus.Paid;
+        UpdatedAtUtc = FinanceGuard.Utc(utcNow, nameof(utcNow));
+    }
 
     public void ReplaceCalculatedTotal(decimal totalAmount, DateTime utcNow)
     {
@@ -729,7 +948,7 @@ public sealed class Invoice
     {
         if (Status == InvoiceStatus.Closed)
             return;
-        if (dueDate <= ClosingDate)
+        if (ClosingDate is null || dueDate <= ClosingDate)
             throw new ConflictException("O vencimento deve ser posterior ao fechamento da fatura.");
         if (TotalAmount <= 0)
             throw new ConflictException("Uma fatura sem compras não pode ser fechada.");

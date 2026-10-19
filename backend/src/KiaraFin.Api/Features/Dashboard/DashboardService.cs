@@ -37,7 +37,7 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
         var monthIncome = await consumption.Where(x => x.Type == FinancialTransactionType.Income)
             .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
         var monthExpenses = await consumption.Where(x => x.Type == FinancialTransactionType.Expense)
-            .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
+            .SumAsync(x => (decimal?)(x.IsRefund ? -x.Amount : x.Amount), cancellationToken) ?? 0;
 
         var projectionStart = monthStart > today ? monthStart : today;
         var pending = await dbContext.FinancialTransactions.AsNoTracking().Where(x =>
@@ -138,7 +138,7 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
                 group.Key.Year,
                 group.Key.Month,
                 Income = group.Where(x => x.Type == FinancialTransactionType.Income).Sum(x => x.Amount),
-                Expenses = group.Where(x => x.Type == FinancialTransactionType.Expense).Sum(x => x.Amount)
+                Expenses = group.Where(x => x.Type == FinancialTransactionType.Expense).Sum(x => x.IsRefund ? -x.Amount : x.Amount)
             }).ToListAsync(cancellationToken);
         return Enumerable.Range(0, 6).Select(index => from.AddMonths(index)).Select(period =>
         {
@@ -162,7 +162,7 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
                 group.Key.Name,
                 group.Key.Color,
                 group.Key.Icon,
-                Amount = group.Sum(x => x.transaction.Amount)
+                Amount = group.Sum(x => x.transaction.IsRefund ? -x.transaction.Amount : x.transaction.Amount)
             })
             .OrderByDescending(x => x.Amount)
             .ToListAsync(cancellationToken);
@@ -259,7 +259,7 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
     {
         var cards = await dbContext.CreditCards.AsNoTracking()
             .Where(x => x.HouseholdId == householdId && x.Status == CreditCardStatus.Active)
-            .Select(x => new { x.Id, x.Name, x.Color, x.TotalLimit }).ToListAsync(cancellationToken);
+            .Select(x => new { x.Id, x.Name, x.Color, x.TotalLimit, x.CurrentBalance, x.AvailableLimit, x.InstitutionControlled }).ToListAsync(cancellationToken);
         var cardIds = cards.Select(x => x.Id).ToList();
         var used = await dbContext.FinancialTransactions.AsNoTracking().Where(x =>
                 x.HouseholdId == householdId && x.CreditCardId != null && cardIds.Contains(x.CreditCardId.Value) &&
@@ -267,12 +267,15 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
             .Join(dbContext.Invoices.AsNoTracking().Where(x => x.Status != InvoiceStatus.Paid && x.Status != InvoiceStatus.Canceled),
                 transaction => transaction.InvoiceId, invoice => invoice.Id, (transaction, invoice) => transaction)
             .GroupBy(x => x.CreditCardId!.Value)
-            .Select(group => new { CardId = group.Key, Amount = group.Sum(x => x.Amount) })
+            .Select(group => new { CardId = group.Key, Amount = group.Sum(x => x.IsRefund ? -x.Amount : x.Amount) })
             .ToDictionaryAsync(x => x.CardId, x => x.Amount, cancellationToken);
         return cards.Select(x =>
         {
-            var usedLimit = used.GetValueOrDefault(x.Id);
-            return new DashboardCardItem(x.Id, x.Name, x.Color, x.TotalLimit, usedLimit, x.TotalLimit - usedLimit);
+            var calculatedUsed = used.GetValueOrDefault(x.Id);
+            var effectiveUsed = x.InstitutionControlled ? x.CurrentBalance : calculatedUsed;
+            var available = x.AvailableLimit ??
+                (x.TotalLimit is decimal total && effectiveUsed is decimal usedAmount ? total - usedAmount : null);
+            return new DashboardCardItem(x.Id, x.Name, x.Color, x.TotalLimit, effectiveUsed, available);
         }).ToList();
     }
 

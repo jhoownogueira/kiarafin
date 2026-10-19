@@ -1,5 +1,6 @@
 using KiaraFin.Api.Features.Identity;
 using KiaraFin.Api.Features.Finance;
+using KiaraFin.Api.Features.Pluggy;
 using Microsoft.EntityFrameworkCore;
 
 namespace KiaraFin.Api.Data;
@@ -20,6 +21,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InstallmentPlan> InstallmentPlans => Set<InstallmentPlan>();
     public DbSet<CreditCardSubscription> CreditCardSubscriptions => Set<CreditCardSubscription>();
+    public DbSet<FinancialIntegration> FinancialIntegrations => Set<FinancialIntegration>();
+    public DbSet<ExternalFinancialAccount> ExternalFinancialAccounts => Set<ExternalFinancialAccount>();
+    public DbSet<ExternalTransactionMapping> ExternalTransactionMappings => Set<ExternalTransactionMapping>();
+    public DbSet<FinancialIntegrationSync> FinancialIntegrationSyncs => Set<FinancialIntegrationSync>();
+    public DbSet<PluggySyncJob> PluggySyncJobs => Set<PluggySyncJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -57,6 +57,7 @@ export const transactionService = {
     return data
   },
   async update(householdId: string, id: string, input: TransactionInput) { const update = { description: input.description, amount: input.amount, categoryId: input.categoryId, accountId: input.accountId, competenceDate: input.competenceDate, dueDate: input.dueDate, notes: input.notes, responsibleUserId: input.responsibleUserId, scope: input.scope }; const { data } = await api.put<Transaction>(`${root(householdId)}/transactions/${id}`, update); return data },
+  async updateMetadata(householdId: string, id: string, input: Pick<TransactionInput, "categoryId" | "notes">) { const { data } = await api.patch<Transaction>(`${root(householdId)}/transactions/${id}/metadata`, { categoryId: input.categoryId, notes: input.notes || null }); return data },
   async settle(householdId: string, id: string, settledDate: string) { const { data } = await api.post<Transaction>(`${root(householdId)}/transactions/${id}/settle`, { settledDate }); return data },
   async cancel(householdId: string, id: string) { const { data } = await api.post<Transaction>(`${root(householdId)}/transactions/${id}/cancel`); return data },
   async transfer(householdId: string, input: TransferInput) { const { data } = await api.post<Transaction>(`${root(householdId)}/transactions/transfers`, input); return data },

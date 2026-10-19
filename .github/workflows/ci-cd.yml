@@ -87,6 +87,14 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_KEY: ${{ secrets.JWT_KEY }}
           PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN }}
+          PLUGGY_ENABLED: ${{ vars.PLUGGY_ENABLED || 'false' }}
+          PLUGGY_BASE_URL: ${{ vars.PLUGGY_BASE_URL || 'https://api.pluggy.ai' }}
+          PLUGGY_CLIENT_ID: ${{ secrets.PLUGGY_CLIENT_ID }}
+          PLUGGY_CLIENT_SECRET: ${{ secrets.PLUGGY_CLIENT_SECRET }}
+          PLUGGY_ITEM_ID: ${{ vars.PLUGGY_ITEM_ID }}
+          PLUGGY_WEBHOOK_SECRET: ${{ secrets.PLUGGY_WEBHOOK_SECRET }}
+          PLUGGY_AUTHORIZED_EMAIL: ${{ vars.PLUGGY_AUTHORIZED_EMAIL || 'jhoownogueira@outlook.com' }}
+          PLUGGY_SYNC_INTERVAL_HOURS: ${{ vars.PLUGGY_SYNC_INTERVAL_HOURS || '24' }}
         run: |
           if [ -z "$POSTGRES_PASSWORD" ]; then
             echo "::error::Repository secret POSTGRES_PASSWORD is missing"
@@ -103,6 +111,36 @@ jobs:
               exit 1
               ;;
           esac
+          case "$PLUGGY_ENABLED" in
+            true|false) ;;
+            *)
+              echo "::error::Repository variable PLUGGY_ENABLED must be true or false"
+              exit 1
+              ;;
+          esac
+          if [ "$PLUGGY_ENABLED" = "true" ]; then
+            if [ -z "$PLUGGY_CLIENT_ID" ] || [ -z "$PLUGGY_CLIENT_SECRET" ] || [ -z "$PLUGGY_ITEM_ID" ] || [ -z "$PLUGGY_WEBHOOK_SECRET" ]; then
+              echo "::error::Pluggy is enabled, but one or more required Pluggy secrets/variables are missing"
+              exit 1
+            fi
+            if [ "$PLUGGY_AUTHORIZED_EMAIL" != "jhoownogueira@outlook.com" ]; then
+              echo "::error::Repository variable PLUGGY_AUTHORIZED_EMAIL must identify the authorized integration owner"
+              exit 1
+            fi
+            case "$PLUGGY_BASE_URL" in
+              https://*) ;;
+              *)
+                echo "::error::Repository variable PLUGGY_BASE_URL must be an HTTPS URL"
+                exit 1
+                ;;
+            esac
+            case "$PLUGGY_SYNC_INTERVAL_HOURS" in
+              ''|*[!0-9]*|0)
+                echo "::error::Repository variable PLUGGY_SYNC_INTERVAL_HOURS must be a positive integer"
+                exit 1
+                ;;
+            esac
+          fi
           docker compose version
 
       - name: Build, migrate and deploy
@@ -114,6 +152,14 @@ jobs:
           PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN }}
           FRONTEND_BIND_ADDRESS: 0.0.0.0
           BACKEND_BIND_ADDRESS: 127.0.0.1
+          PLUGGY_ENABLED: ${{ vars.PLUGGY_ENABLED || 'false' }}
+          PLUGGY_BASE_URL: ${{ vars.PLUGGY_BASE_URL || 'https://api.pluggy.ai' }}
+          PLUGGY_CLIENT_ID: ${{ secrets.PLUGGY_CLIENT_ID }}
+          PLUGGY_CLIENT_SECRET: ${{ secrets.PLUGGY_CLIENT_SECRET }}
+          PLUGGY_ITEM_ID: ${{ vars.PLUGGY_ITEM_ID }}
+          PLUGGY_WEBHOOK_SECRET: ${{ secrets.PLUGGY_WEBHOOK_SECRET }}
+          PLUGGY_AUTHORIZED_EMAIL: ${{ vars.PLUGGY_AUTHORIZED_EMAIL || 'jhoownogueira@outlook.com' }}
+          PLUGGY_SYNC_INTERVAL_HOURS: ${{ vars.PLUGGY_SYNC_INTERVAL_HOURS || '24' }}
         run: docker compose -f docker-compose.production.yml up --detach --build --remove-orphans --wait
 
       - name: Verify deployment

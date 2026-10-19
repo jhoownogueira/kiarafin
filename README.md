@@ -8,6 +8,11 @@ financeiro (`Household`) por duas pessoas.
 > lançamentos, recorrências, parcelas, cartões, dashboard e relatórios usam a API
 > e o PostgreSQL reais. Consulte o roadmap para limitações e evoluções planejadas.
 
+O cadastro de novos usuários está permanentemente desativado no backend. Contas já existentes
+continuam autenticando normalmente; essa restrição não remove nem altera
+usuários cadastrados. A integração Open Finance possui uma verificação adicional
+e só pode ser operada pelo e-mail autorizado configurado no backend.
+
 ## Stack
 
 - Frontend: Next.js 16 (App Router), React 19, TypeScript strict e Tailwind CSS.
@@ -21,6 +26,9 @@ domínio.
 
 Para publicar em Ubuntu com Docker, GitHub Actions e Nginx Proxy Manager,
 consulte [Deploy no Ubuntu](docs/deployment-ubuntu.md).
+
+A configuração e a operação da integração Open Finance estão descritas em
+[Open Finance com Meu Pluggy](docs/open-finance-pluggy.md).
 
 ## Pré-requisitos
 
@@ -72,6 +80,10 @@ $env:Jwt__Key = "<chave-local-forte-com-pelo-menos-32-bytes>"
 
 O frontend recebe apenas configuração pública, como a URL da API; nenhum
 segredo pode usar o prefixo `NEXT_PUBLIC_`.
+
+A integração Pluggy nasce desabilitada. Para desenvolvimento local, configure
+as opções `Pluggy__*` somente no backend por User Secrets ou variáveis de
+ambiente; nunca envie Client Secret ou segredo do webhook ao Next.js.
 
 ## Executar em desenvolvimento
 
@@ -159,7 +171,7 @@ GitHub e faz deploy por um runner self-hosted no Ubuntu.
 
 Em desenvolvimento, a especificação OpenAPI exposta pela API é a fonte de verdade.
 
-- `/api/auth`: cadastro, login, refresh, logout e usuário autenticado.
+- `/api/auth`: login, refresh, logout e usuário autenticado; o endpoint de cadastro responde `403` permanentemente.
 - `/api/households`: núcleo familiar, membros e convites.
 - `/api/households/{householdId}/accounts`: contas, saldos e histórico.
 - `/api/households/{householdId}/categories`: categorias padrão e personalizadas.
@@ -182,7 +194,8 @@ autorizar acesso.
 - [x] Planejamento: recorrências, parcelas, cartões e faturas com pagamento integral.
 - [x] Experiência: dashboard, relatórios, responsividade e modos claro/escuro.
 - [x] Qualidade: testes críticos, revisão de segurança e documentação OpenAPI.
-- [ ] Evolução: pagamento parcial de fatura, notificações e importação bancária.
+- [x] Open Finance: importação e sincronização automática via Meu Pluggy.
+- [ ] Evolução: pagamento parcial de fatura e notificações.
 
 Marque itens apenas quando API, interface, persistência e validações associadas
 estiverem funcionais, sem dados mockados permanentes.

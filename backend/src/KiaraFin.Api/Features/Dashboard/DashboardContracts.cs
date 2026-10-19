@@ -22,7 +22,7 @@ public sealed record LatestTransactionItem(
 public sealed record DashboardInvoiceItem(
     Guid Id, Guid CreditCardId, string CardName, decimal Amount, DateOnly DueDate, InvoiceStatus Status);
 public sealed record DashboardCardItem(
-    Guid Id, string Name, string? Color, decimal TotalLimit, decimal UsedLimit, decimal AvailableLimit);
+    Guid Id, string Name, string? Color, decimal? TotalLimit, decimal? UsedLimit, decimal? AvailableLimit);
 
 public sealed record DashboardResponse(
     string Period,
