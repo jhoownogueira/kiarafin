@@ -32,7 +32,7 @@ Não afetam o saldo atual:
 - lançamentos cancelados;
 - compra no cartão de crédito;
 - despesa de consumo representada por uma compra no cartão;
-- recorrência ainda sem ocorrência efetiva.
+- previsão mensal de salário, renda extra ou conta fixa.
 
 Uma transferência é registrada como uma única operação com duas movimentações
 vinculadas. Ela altera os saldos das contas, mas não é receita nem despesa nos
@@ -66,17 +66,28 @@ saldo projetado = saldo atual disponível
                  - faturas de cartão previstas no horizonte
 ```
 
-O cálculo inclui ocorrências recorrentes materializadas para o horizonte. Uma
-compra já incluída em uma fatura prevista não é somada novamente como despesa
-pendente de caixa. Parcelas futuras entram pela fatura correspondente, nunca em
-duplicidade pelo valor total da compra.
+Além da projeção operacional, o dashboard possui uma análise de planejamento de
+seis meses. Ela repete as premissas mensais cadastradas pelo usuário e cruza
+salários, rendas extras e contas fixas com faturas oficiais e faturas de cartão
+em formação. Essas premissas nunca criam lançamentos ou movimentações de conta.
+Essa análise começa em zero e não soma o saldo das contas. A fatura vigente é
+apresentada no mês atual, ainda que o vencimento bancário ocorra no mês seguinte;
+as faturas posteriores são distribuídas nos meses seguintes da projeção.
+Quando um mês futuro ainda não possui fatura ou compras em formação, cada cartão
+usa a média de suas três últimas faturas pagas. Na ausência desse histórico, o
+valor atual conhecido é usado como referência. Assim que o Pluggy disponibiliza
+um valor real para o mês, ele substitui integralmente a estimativa daquele cartão.
+
+Uma compra já incluída em uma fatura prevista não é somada novamente como
+despesa pendente de caixa. Parcelas futuras entram pela fatura correspondente,
+nunca em duplicidade pelo valor total da compra.
 
 Limitações atuais:
 
 - a projeção depende dos valores previstos informados pelo usuário;
 - não estima juros, câmbio, rendimento ou saldo bancário externo;
-- recorrências precisam estar geradas/materializadas no período ou ser
-  expandidas de modo idempotente pela consulta;
+- valores de salário, extras e contas fixas são premissas manuais e permanecem
+  iguais até que o usuário os edite;
 - pagamentos parciais de fatura não serão apresentados como suportados até que
   haja regra, persistência e testes específicos.
 
@@ -143,18 +154,17 @@ Cada parcela guarda número, quantidade total, valor e data. Constraints impedem
 duas parcelas com o mesmo número na mesma compra. Reprocessar a criação não pode
 duplicá-las.
 
-## Recorrências
+## Previsões mensais
 
-Uma recorrência mensal contém valor previsto, conta, categoria, tipo, dia de
-vencimento, início, término opcional e estado ativo/pausado/encerrado.
+Cada previsão contém nome, tipo (`Salary`, `ExtraIncome` ou `FixedExpense`),
+valor e dia esperado. Não há início, término ou geração de ocorrência: a linha
+representa a premissa vigente e é atualizada manualmente pelo usuário.
 
-- Cada período gera no máximo uma ocorrência, garantida por chave única.
-- Para dia 29, 30 ou 31 inexistente no mês, o vencimento é o último dia válido.
-- Reprocessar o mesmo mês é idempotente.
-- Uma ocorrência pode ter valor diferente do modelo.
-- Alterar o modelo só afeta ocorrências futuras ainda não consolidadas.
-- Ocorrências anteriores preservam valor, vencimento e estado históricos.
-- Pausar impede novas ocorrências; encerrar define o fim sem apagar histórico.
+- Previsões não alteram contas, faturas, lançamentos ou relatórios.
+- O mesmo valor é repetido nos seis meses da análise até ser editado.
+- Excluir uma previsão apenas a remove dos cálculos futuros.
+- Recorrências ativas legadas são migradas como premissas, sem gerar novos
+  lançamentos.
 
 ## Categorias e responsáveis
 
@@ -171,7 +181,7 @@ Operações suscetíveis a repetição devem ter chave ou constraint própria:
 
 - rotação de refresh token;
 - transferência;
-- geração de ocorrência recorrente;
+- sincronização de dados externos;
 - criação das parcelas;
 - associação de compra à fatura;
 - pagamento de fatura.

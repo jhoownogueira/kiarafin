@@ -28,9 +28,6 @@ export const categoryService = {
 export const transactionService = {
   async list(householdId: string, filters: TransactionFilters, pageSize = 20) { const { data } = await api.get<PagedResponse<Transaction>>(`${root(householdId)}/transactions`, { params: { ...filters, status: filters.status || undefined, pageSize } }); return data },
   async listMonth(householdId: string, filters: TransactionFilters) {
-    const [year, month] = (filters.from ?? "").split("-").map(Number)
-    await api.post(`${root(householdId)}/recurring-transactions/generate/${year}/${month}`)
-
     const firstPage = await transactionService.list(householdId, { ...filters, page: 1 }, 100)
     if (firstPage.totalPages <= 1) return firstPage
 
@@ -57,6 +54,7 @@ export const transactionService = {
     return data
   },
   async update(householdId: string, id: string, input: TransactionInput) { const update = { description: input.description, amount: input.amount, categoryId: input.categoryId, accountId: input.accountId, competenceDate: input.competenceDate, dueDate: input.dueDate, notes: input.notes, responsibleUserId: input.responsibleUserId, scope: input.scope }; const { data } = await api.put<Transaction>(`${root(householdId)}/transactions/${id}`, update); return data },
+  async updateMetadata(householdId: string, id: string, input: Pick<TransactionInput, "categoryId" | "notes">) { const { data } = await api.patch<Transaction>(`${root(householdId)}/transactions/${id}/metadata`, { categoryId: input.categoryId, notes: input.notes || null }); return data },
   async settle(householdId: string, id: string, settledDate: string) { const { data } = await api.post<Transaction>(`${root(householdId)}/transactions/${id}/settle`, { settledDate }); return data },
   async cancel(householdId: string, id: string) { const { data } = await api.post<Transaction>(`${root(householdId)}/transactions/${id}/cancel`); return data },
   async transfer(householdId: string, input: TransferInput) { const { data } = await api.post<Transaction>(`${root(householdId)}/transactions/transfers`, input); return data },

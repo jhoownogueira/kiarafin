@@ -101,6 +101,8 @@ public sealed class InstallmentService(AppDbContext dbContext, ICurrentUser curr
         CancellationToken cancellationToken)
     {
         var card = await dbContext.Set<CreditCard>().SingleAsync(x => x.Id == plan.SourceId, cancellationToken);
+        if (card.InstitutionControlled)
+            throw new ConflictException("As compras deste cartão são sincronizadas pela instituição financeira.");
         var activeInvoiceIds = await dbContext.Set<Invoice>().AsNoTracking()
             .Where(x => x.CreditCardId == card.Id &&
                         x.Status != InvoiceStatus.Paid && x.Status != InvoiceStatus.Canceled)
@@ -112,7 +114,7 @@ public sealed class InstallmentService(AppDbContext dbContext, ICurrentUser curr
                         x.InvoiceId != null && activeInvoiceIds.Contains(x.InvoiceId.Value) &&
                         x.Status != FinancialTransactionStatus.Canceled)
             .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
-        if (committed + plan.TotalAmount > card.TotalLimit)
+        if (committed + plan.TotalAmount > card.TotalLimit!.Value)
             throw new ConflictException("A compra excede o limite disponível do cartão.");
 
         var entries = new List<FinancialTransaction>();
@@ -123,7 +125,7 @@ public sealed class InstallmentService(AppDbContext dbContext, ICurrentUser curr
                 plan.FirstInstallmentDate,
                 allocation.Number - 1,
                 plan.FirstInstallmentDate.Day);
-            var cycle = InvoiceCycleCalculator.ForPurchase(installmentDate, card.ClosingDay, card.DueDay);
+            var cycle = InvoiceCycleCalculator.ForPurchase(installmentDate, card.ClosingDay!.Value, card.DueDay!.Value);
             if (!loadedInvoices.TryGetValue(cycle.ClosingDate, out var invoice))
             {
                 invoice = await dbContext.Set<Invoice>().SingleOrDefaultAsync(

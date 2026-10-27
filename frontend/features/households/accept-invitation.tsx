@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import axios from "axios"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { CheckCircle2, LoaderCircle, LogIn, UserPlus, Users } from "lucide-react"
+import { CheckCircle2, LoaderCircle, LogIn, Users } from "lucide-react"
 import { toast } from "sonner"
 
 import { BrandLogo } from "@/components/brand/brand-logo"
@@ -40,7 +40,6 @@ export function AcceptInvitation({ token }: { token: string }) {
   const unauthorized = axios.isAxiosError(session.error) && session.error.response?.status === 401
   const returnTo = `/convite/${encodeURIComponent(normalizedToken)}`
   const loginHref = `/login?returnTo=${encodeURIComponent(returnTo)}`
-  const registerHref = `/cadastro?returnTo=${encodeURIComponent(returnTo)}`
   const accept = useMutation({
     mutationFn: () => householdService.acceptInvitation(normalizedToken),
     onSuccess: async (household) => {
@@ -64,8 +63,8 @@ export function AcceptInvitation({ token }: { token: string }) {
               <div className="space-y-3"><Skeleton className="h-12 w-full" /><Skeleton className="mx-auto h-4 w-3/4" /></div>
             ) : unauthorized ? (
               <div>
-                <p className="text-center text-sm leading-6 text-muted-foreground">Para proteger os dados da família, entre na sua conta ou crie uma antes de aceitar.</p>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2"><Button asChild size="lg"><Link href={loginHref}><LogIn />Entrar</Link></Button><Button asChild size="lg" variant="outline"><Link href={registerHref}><UserPlus />Criar conta</Link></Button></div>
+                <p className="text-center text-sm leading-6 text-muted-foreground">Para proteger os dados da família, entre em uma conta existente antes de aceitar.</p>
+                <Button asChild size="lg" className="mt-6 w-full"><Link href={loginHref}><LogIn />Entrar</Link></Button>
               </div>
             ) : session.isError ? (
               <div className="text-center"><p className="text-sm text-destructive">Não foi possível verificar sua sessão.</p><Button variant="outline" className="mt-4" onClick={() => session.refetch()}>Tentar novamente</Button></div>

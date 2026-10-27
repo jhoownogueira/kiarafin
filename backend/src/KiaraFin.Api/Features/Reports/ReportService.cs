@@ -19,7 +19,7 @@ public sealed class ReportService(AppDbContext dbContext, HouseholdAccessService
                 group.Key.Year,
                 group.Key.Month,
                 Income = group.Sum(x => x.Type == FinancialTransactionType.Income ? x.Amount : 0m),
-                Expenses = group.Sum(x => x.Type == FinancialTransactionType.Expense ? x.Amount : 0m)
+                Expenses = group.Sum(x => x.Type == FinancialTransactionType.Expense ? (x.IsRefund ? -x.Amount : x.Amount) : 0m)
             })
             .OrderByDescending(x => x.Year).ThenByDescending(x => x.Month);
         var page = await PageValuesAsync(grouped, filter, cancellationToken);
@@ -33,7 +33,7 @@ public sealed class ReportService(AppDbContext dbContext, HouseholdAccessService
     {
         var query = (await FilteredQueryAsync(householdId, filter, cancellationToken))
             .Where(x => x.Type == FinancialTransactionType.Expense && x.CategoryId != null);
-        var totalAmount = await query.SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
+        var totalAmount = await query.SumAsync(x => (decimal?)(x.IsRefund ? -x.Amount : x.Amount), cancellationToken) ?? 0;
         var grouped = query.Join(dbContext.Categories.AsNoTracking(), transaction => transaction.CategoryId,
                 category => category.Id, (transaction, category) => new { transaction, category })
             .GroupBy(x => new { x.category.Id, x.category.Name, x.category.Color, x.category.Icon })
@@ -43,7 +43,7 @@ public sealed class ReportService(AppDbContext dbContext, HouseholdAccessService
                 group.Key.Name,
                 group.Key.Color,
                 group.Key.Icon,
-                Amount = group.Sum(x => x.transaction.Amount)
+                Amount = group.Sum(x => x.transaction.IsRefund ? -x.transaction.Amount : x.transaction.Amount)
             }).OrderByDescending(x => x.Amount);
         var page = await PageValuesAsync(grouped, filter, cancellationToken);
         return new PagedResponse<CategoryReportItem>(
@@ -64,7 +64,7 @@ public sealed class ReportService(AppDbContext dbContext, HouseholdAccessService
                 group.Key.Id,
                 group.Key.Name,
                 Income = group.Sum(x => x.transaction.Type == FinancialTransactionType.Income ? x.transaction.Amount : 0m),
-                Expenses = group.Sum(x => x.transaction.Type == FinancialTransactionType.Expense ? x.transaction.Amount : 0m)
+                Expenses = group.Sum(x => x.transaction.Type == FinancialTransactionType.Expense ? (x.transaction.IsRefund ? -x.transaction.Amount : x.transaction.Amount) : 0m)
             }).OrderByDescending(x => x.Expenses);
         var page = await PageValuesAsync(grouped, filter, cancellationToken);
         return new PagedResponse<ResponsibleReportItem>(
@@ -78,9 +78,9 @@ public sealed class ReportService(AppDbContext dbContext, HouseholdAccessService
     {
         var query = (await FilteredQueryAsync(householdId, filter, cancellationToken))
             .Where(x => x.Type == FinancialTransactionType.Expense);
-        var totalAmount = await query.SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
+        var totalAmount = await query.SumAsync(x => (decimal?)(x.IsRefund ? -x.Amount : x.Amount), cancellationToken) ?? 0;
         var grouped = query.GroupBy(x => x.Scope)
-            .Select(group => new { Scope = group.Key, Amount = group.Sum(x => x.Amount) })
+            .Select(group => new { Scope = group.Key, Amount = group.Sum(x => x.IsRefund ? -x.Amount : x.Amount) })
             .OrderByDescending(x => x.Amount);
         var page = await PageValuesAsync(grouped, filter, cancellationToken);
         return new PagedResponse<ScopeReportItem>(

@@ -28,6 +28,7 @@ public sealed record UpdateTransactionRequest(
     ExpenseScope Scope);
 
 public sealed record SettleTransactionRequest(DateOnly SettledDate);
+public sealed record UpdateTransactionMetadataRequest(Guid CategoryId, [StringLength(1000)] string? Notes);
 
 public sealed record CreateTransferRequest(
     [Required, StringLength(100)] string ClientRequestId,
@@ -57,4 +58,8 @@ public sealed record TransactionResponse(
     Guid? RecurringTransactionId,
     Guid? CardSubscriptionId,
     string? ClientRequestId,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    string? SourceProvider,
+    string? ExternalId,
+    bool InstitutionControlled,
+    bool IsRefund);

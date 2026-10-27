@@ -5,8 +5,13 @@ em desenvolvimento e terá como primeiro cenário o compartilhamento de um núcl
 financeiro (`Household`) por duas pessoas.
 
 > Status: MVP funcional. Autenticação, núcleo familiar, contas, categorias,
-> lançamentos, recorrências, parcelas, cartões, dashboard e relatórios usam a API
+> lançamentos, previsões, parcelas, cartões, dashboard e relatórios usam a API
 > e o PostgreSQL reais. Consulte o roadmap para limitações e evoluções planejadas.
+
+O cadastro de novos usuários está permanentemente desativado no backend. Contas já existentes
+continuam autenticando normalmente; essa restrição não remove nem altera
+usuários cadastrados. A integração Open Finance possui uma verificação adicional
+e só pode ser operada pelo e-mail autorizado configurado no backend.
 
 ## Stack
 
@@ -21,6 +26,9 @@ domínio.
 
 Para publicar em Ubuntu com Docker, GitHub Actions e Nginx Proxy Manager,
 consulte [Deploy no Ubuntu](docs/deployment-ubuntu.md).
+
+A configuração e a operação da integração Open Finance estão descritas em
+[Open Finance com Meu Pluggy](docs/open-finance-pluggy.md).
 
 ## Pré-requisitos
 
@@ -72,6 +80,10 @@ $env:Jwt__Key = "<chave-local-forte-com-pelo-menos-32-bytes>"
 
 O frontend recebe apenas configuração pública, como a URL da API; nenhum
 segredo pode usar o prefixo `NEXT_PUBLIC_`.
+
+A integração Pluggy nasce desabilitada. Para desenvolvimento local, configure
+as opções `Pluggy__*` somente no backend por User Secrets ou variáveis de
+ambiente; nunca envie Client Secret ou segredo do webhook ao Next.js.
 
 ## Executar em desenvolvimento
 
@@ -159,12 +171,12 @@ GitHub e faz deploy por um runner self-hosted no Ubuntu.
 
 Em desenvolvimento, a especificação OpenAPI exposta pela API é a fonte de verdade.
 
-- `/api/auth`: cadastro, login, refresh, logout e usuário autenticado.
+- `/api/auth`: login, refresh, logout e usuário autenticado; o endpoint de cadastro responde `403` permanentemente.
 - `/api/households`: núcleo familiar, membros e convites.
 - `/api/households/{householdId}/accounts`: contas, saldos e histórico.
 - `/api/households/{householdId}/categories`: categorias padrão e personalizadas.
 - `/api/households/{householdId}/transactions`: receitas, despesas, cancelamentos e transferências.
-- `/api/households/{householdId}/recurring-transactions`: recorrências e geração mensal.
+- `/api/households/{householdId}/forecasts`: salários, rendas extras e contas fixas previstas.
 - `/api/households/{householdId}/installments`: planos e parcelas futuras.
 - `/api/households/{householdId}/credit-cards`: cartões, compras, faturas e pagamento integral.
 - `/api/households/{householdId}/dashboard`: indicadores, gráficos e vencimentos.
@@ -173,16 +185,3 @@ Em desenvolvimento, a especificação OpenAPI exposta pela API é a fonte de ver
 Todos os endpoints financeiros deverão validar o `Household` do usuário
 autenticado; um identificador enviado pelo cliente nunca será suficiente para
 autorizar acesso.
-
-## Roadmap
-
-- [x] Fundação: arquitetura modular, EF Core, PostgreSQL e migration inicial.
-- [x] Autenticação: JWT, refresh token rotativo, sessão e núcleo familiar.
-- [x] Financeiro: contas, categorias, transações e transferências.
-- [x] Planejamento: recorrências, parcelas, cartões e faturas com pagamento integral.
-- [x] Experiência: dashboard, relatórios, responsividade e modos claro/escuro.
-- [x] Qualidade: testes críticos, revisão de segurança e documentação OpenAPI.
-- [ ] Evolução: pagamento parcial de fatura, notificações e importação bancária.
-
-Marque itens apenas quando API, interface, persistência e validações associadas
-estiverem funcionais, sem dados mockados permanentes.

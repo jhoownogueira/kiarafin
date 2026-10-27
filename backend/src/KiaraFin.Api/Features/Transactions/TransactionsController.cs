@@ -43,6 +43,12 @@ public sealed class TransactionsController(TransactionService service) : Control
         CancellationToken cancellationToken) =>
         Ok(await service.SettleAsync(householdId, transactionId, request, cancellationToken));
 
+    [HttpPatch("{transactionId:guid}/metadata")]
+    public async Task<ActionResult<TransactionResponse>> UpdateMetadata(
+        Guid householdId, Guid transactionId, UpdateTransactionMetadataRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await service.UpdateMetadataAsync(householdId, transactionId, request, cancellationToken));
+
     [HttpPost("{transactionId:guid}/cancel")]
     public async Task<ActionResult<TransactionResponse>> Cancel(
         Guid householdId, Guid transactionId, CancellationToken cancellationToken) =>

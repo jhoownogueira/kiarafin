@@ -18,9 +18,11 @@ public sealed class AuthController(
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request, CancellationToken cancellationToken)
     {
-        var session = await authService.RegisterAsync(request, cancellationToken);
-        SetRefreshCookie(session);
-        return Ok(session.Response);
+        await Task.CompletedTask;
+        return Problem(
+            statusCode: StatusCodes.Status403Forbidden,
+            title: "Cadastro desativado",
+            detail: "O cadastro de novos usuários está permanentemente desativado.");
     }
 
     [AllowAnonymous]

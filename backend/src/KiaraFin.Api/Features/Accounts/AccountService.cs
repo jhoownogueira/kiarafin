@@ -31,7 +31,7 @@ public sealed class AccountService(AppDbContext dbContext, HouseholdAccessServic
                 x.InitialBalance + (dbContext.AccountMovements.Where(m => m.AccountId == x.Id).Sum(m => (decimal?)m.SignedAmount) ?? 0),
                 dbContext.AccountMovements.Where(m => m.AccountId == x.Id && m.SignedAmount > 0).Sum(m => (decimal?)m.SignedAmount) ?? 0,
                 -(dbContext.AccountMovements.Where(m => m.AccountId == x.Id && m.SignedAmount < 0).Sum(m => (decimal?)m.SignedAmount) ?? 0),
-                x.ResponsibleUserId, x.IsActive))
+                x.ResponsibleUserId, x.IsActive, x.SourceProvider, x.ExternalId, x.InstitutionControlled))
             .ToListAsync(cancellationToken);
         return new PagedResponse<AccountResponse>(items, page, pageSize, total);
     }
@@ -70,6 +70,8 @@ public sealed class AccountService(AppDbContext dbContext, HouseholdAccessServic
         await access.RequireMembershipAsync(householdId, cancellationToken);
         await access.RequireMemberUserAsync(householdId, request.ResponsibleUserId, cancellationToken);
         var account = await FindAsync(householdId, accountId, cancellationToken);
+        if (account.InstitutionControlled)
+            throw new ConflictException("Os campos desta conta são controlados pela instituição financeira.");
         account.Update(request.Name, request.Type, request.ResponsibleUserId,
             request.Institution, request.Color, request.Icon, DateTime.UtcNow);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -84,6 +86,8 @@ public sealed class AccountService(AppDbContext dbContext, HouseholdAccessServic
     {
         await access.RequireMembershipAsync(householdId, cancellationToken);
         var account = await FindAsync(householdId, accountId, cancellationToken);
+        if (account.InstitutionControlled)
+            throw new ConflictException("Esta conta é controlada pela instituição financeira.");
         account.SetActive(active, DateTime.UtcNow);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -126,6 +130,7 @@ public sealed class AccountService(AppDbContext dbContext, HouseholdAccessServic
         return new AccountResponse(
             account.Id, account.Name, account.Type, account.Institution, account.Color, account.Icon,
             account.InitialBalance, account.InitialBalanceDate, account.InitialBalance + movementBalance,
-            income, expenses, account.ResponsibleUserId, account.IsActive);
+            income, expenses, account.ResponsibleUserId, account.IsActive,
+            account.SourceProvider, account.ExternalId, account.InstitutionControlled);
     }
 }

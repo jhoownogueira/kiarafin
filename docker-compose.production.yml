@@ -48,7 +48,20 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    environment: *api-environment
+    environment:
+      <<: *api-environment
+      Pluggy__Enabled: ${PLUGGY_ENABLED:-false}
+      Pluggy__BaseUrl: ${PLUGGY_BASE_URL:-https://api.pluggy.ai}
+      Pluggy__ClientId: ${PLUGGY_CLIENT_ID:-}
+      Pluggy__ClientSecret: ${PLUGGY_CLIENT_SECRET:-}
+      Pluggy__ItemId: ${PLUGGY_ITEM_ID:-}
+      Pluggy__WebhookSecret: ${PLUGGY_WEBHOOK_SECRET:-}
+      Pluggy__AuthorizedEmail: ${PLUGGY_AUTHORIZED_EMAIL:-jhoownogueira@outlook.com}
+      Pluggy__SyncIntervalHours: ${PLUGGY_SYNC_INTERVAL_HOURS:-24}
+      TelegramNotifications__Enabled: ${TELEGRAM_NOTIFICATIONS_ENABLED:-false}
+      TelegramNotifications__BotToken: ${TELEGRAM_BOT_TOKEN:-}
+      TelegramNotifications__ChatId: ${TELEGRAM_CHAT_ID:-734302182}
+      TelegramNotifications__AuthorizedEmail: ${TELEGRAM_AUTHORIZED_EMAIL:-jhoownogueira@outlook.com}
     ports:
       - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-3334}:8080"
     depends_on:
