@@ -180,7 +180,7 @@ public sealed class PluggyIntegrationTests
     {
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase($"pluggy-{Guid.NewGuid():N}").Options);
-        var user = new User("Owner", "jhoownogueira@outlook.com", "JHOOWNOGUEIRA@OUTLOOK.COM", "hash");
+        var user = new User("Owner", "owner@example.test", "OWNER@EXAMPLE.TEST", "hash");
         var household = new Household("Casa", user.Id);
         db.AddRange(user, household, new HouseholdMembership(household.Id, user.Id, HouseholdRole.Owner));
         db.FinancialAccounts.Add(new FinancialAccount(household.Id, "Manual", FinancialAccountType.Checking, 10m,
@@ -223,7 +223,7 @@ public sealed class PluggyIntegrationTests
         .UseInMemoryDatabase($"pluggy-{Guid.NewGuid():N}").Options);
     private static async Task<(User User, Household Household)> SeedOwnerAsync(AppDbContext db)
     {
-        var user = new User("Owner", "jhoownogueira@outlook.com", "JHOOWNOGUEIRA@OUTLOOK.COM", "hash");
+        var user = new User("Owner", "owner@example.test", "OWNER@EXAMPLE.TEST", "hash");
         var household = new Household("Casa", user.Id);
         db.AddRange(user, household, new HouseholdMembership(household.Id, user.Id, HouseholdRole.Owner));
         await db.SaveChangesAsync();

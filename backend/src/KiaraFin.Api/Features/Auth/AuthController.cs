@@ -1,6 +1,7 @@
 using KiaraFin.Api.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace KiaraFin.Api.Features.Auth;
 
@@ -10,7 +11,8 @@ public sealed class AuthController(
     AuthService authService,
     ICurrentUser currentUser,
     IRequestOriginValidator originValidator,
-    IWebHostEnvironment environment) : ControllerBase
+    IWebHostEnvironment environment,
+    IOptions<RegistrationOptions> registrationOptions) : ControllerBase
 {
     private const string RefreshCookieName = "kiarafin_refresh_token";
 
@@ -18,11 +20,15 @@ public sealed class AuthController(
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request, CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-        return Problem(
-            statusCode: StatusCodes.Status403Forbidden,
-            title: "Cadastro desativado",
-            detail: "O cadastro de novos usuários está permanentemente desativado.");
+        if (!registrationOptions.Value.Enabled)
+            return Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Cadastro desativado",
+                detail: "O cadastro de novos usuários está desativado nesta instalação.");
+
+        var session = await authService.RegisterAsync(request, cancellationToken);
+        SetRefreshCookie(session);
+        return Ok(session.Response);
     }
 
     [AllowAnonymous]

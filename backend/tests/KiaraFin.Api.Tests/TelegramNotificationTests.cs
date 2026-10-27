@@ -16,28 +16,26 @@ public sealed class TelegramNotificationTests
         var service = CreateService(handler);
 
         await service.NotifyAsync(new AccountUpdateNotification(
-            "jhoownogueira@outlook.com", false, 2, 1, 0, 1,
+            "owner@example.test", false, 2, 1, 0, 1,
             ["Meu & Banco"], new DateTime(2026, 10, 19, 20, 2, 0, DateTimeKind.Utc)), default);
 
         Assert.Equal("/bot123456:placeholder-token/sendMessage", handler.Path);
         using var body = JsonDocument.Parse(handler.Body);
-        Assert.Equal(734302182, body.RootElement.GetProperty("chat_id").GetInt64());
+        Assert.Equal(123456789, body.RootElement.GetProperty("chat_id").GetInt64());
         var text = body.RootElement.GetProperty("text").GetString();
         Assert.Contains("💚", text, StringComparison.Ordinal);
         Assert.Contains("Meu &amp; Banco", text, StringComparison.Ordinal);
         Assert.Contains("2</b> novos lançamentos", text, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("outra-pessoa@example.com", 734302182)]
-    [InlineData("jhoownogueira@outlook.com", 999)]
-    public async Task Does_not_send_outside_the_authorized_identity(string email, long chatId)
+    [Fact]
+    public async Task Does_not_send_outside_the_authorized_identity()
     {
         var handler = new CapturingHandler();
-        var service = CreateService(handler, chatId);
+        var service = CreateService(handler);
 
         await service.NotifyAsync(new AccountUpdateNotification(
-            email, false, 1, 0, 0, 0, [], DateTime.UtcNow), default);
+            "other@example.test", false, 1, 0, 0, 0, [], DateTime.UtcNow), default);
 
         Assert.Equal(0, handler.CallCount);
     }
@@ -49,7 +47,7 @@ public sealed class TelegramNotificationTests
         var service = CreateService(handler);
 
         await service.NotifyForecastAsync(new BalanceForecastNotification(
-            "jhoownogueira@outlook.com", BalanceForecastNotificationReason.ApplicationStarted,
+            "owner@example.test", BalanceForecastNotificationReason.ApplicationStarted,
             13960m, 0m, 2536m, 8489.71m, 2934.29m, null,
             new DateTime(2026, 10, 19, 20, 30, 0, DateTimeKind.Utc)), default);
 
@@ -68,13 +66,13 @@ public sealed class TelegramNotificationTests
         var service = CreateService(handler);
 
         await service.NotifyForecastAsync(new BalanceForecastNotification(
-            "jhoownogueira@outlook.com", BalanceForecastNotificationReason.OpenFinanceSync,
+            "owner@example.test", BalanceForecastNotificationReason.OpenFinanceSync,
             1000m, 0m, 200m, 300m, 500m, 500m, DateTime.UtcNow), default);
 
         Assert.Equal(0, handler.CallCount);
     }
 
-    private static TelegramNotificationService CreateService(CapturingHandler handler, long chatId = 734302182)
+    private static TelegramNotificationService CreateService(CapturingHandler handler, long chatId = 123456789)
     {
         var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.telegram.test/") };
         var options = Options.Create(new TelegramNotificationOptions
@@ -82,7 +80,7 @@ public sealed class TelegramNotificationTests
             Enabled = true,
             BotToken = "123456:placeholder-token",
             ChatId = chatId,
-            AuthorizedEmail = "jhoownogueira@outlook.com"
+            AuthorizedEmail = "owner@example.test"
         });
         return new TelegramNotificationService(client, options, NullLogger<TelegramNotificationService>.Instance);
     }

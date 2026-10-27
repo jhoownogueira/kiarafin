@@ -1,17 +1,31 @@
 # KiaraFin
 
-KiaraFin é uma aplicação de gestão financeira pessoal e familiar. O produto está
-em desenvolvimento e terá como primeiro cenário o compartilhamento de um núcleo
-financeiro (`Household`) por duas pessoas.
+KiaraFin é um projeto pessoal e open source de gestão financeira individual e
+familiar. Ele reúne contas, lançamentos, cartões, previsões e relatórios em um
+núcleo financeiro compartilhável (`Household`). A integração opcional com a
+Pluggy importa dados via Open Finance, recebe atualizações por webhook e pode
+enviar resumos privados pelo Telegram.
+
+O código pode ser estudado, clonado e implantado em infraestrutura própria nos
+termos da [licença MIT](LICENSE). Cada instalação deve usar suas próprias
+credenciais, consentimentos e contas nos serviços externos.
+
+Instância pessoal: [kiarafin.jhonata.dev](https://kiarafin.jhonata.dev/). O
+cadastro público permanece fechado nessa implantação.
 
 > Status: MVP funcional. Autenticação, núcleo familiar, contas, categorias,
 > lançamentos, previsões, parcelas, cartões, dashboard e relatórios usam a API
 > e o PostgreSQL reais. Consulte o roadmap para limitações e evoluções planejadas.
 
-O cadastro de novos usuários está permanentemente desativado no backend. Contas já existentes
-continuam autenticando normalmente; essa restrição não remove nem altera
-usuários cadastrados. A integração Open Finance possui uma verificação adicional
-e só pode ser operada pelo e-mail autorizado configurado no backend.
+O cadastro de novos usuários fica desativado por padrão. Em uma instalação nova,
+o operador pode habilitá-lo temporariamente com `REGISTRATION_ENABLED=true`,
+criar a primeira conta e voltar a desativá-lo. A integração Open Finance possui
+uma verificação adicional e só pode ser operada pelo e-mail configurado em
+`PLUGGY_AUTHORIZED_EMAIL`.
+
+> O KiaraFin não presta aconselhamento financeiro e não é um produto oficial da
+> Pluggy ou do Telegram. Nunca use credenciais ou dados reais em ambientes de
+> teste e mantenha backups do banco de produção.
 
 ## Stack
 
@@ -84,6 +98,11 @@ segredo pode usar o prefixo `NEXT_PUBLIC_`.
 A integração Pluggy nasce desabilitada. Para desenvolvimento local, configure
 as opções `Pluggy__*` somente no backend por User Secrets ou variáveis de
 ambiente; nunca envie Client Secret ou segredo do webhook ao Next.js.
+
+Para criar a primeira conta de uma instalação vazia, habilite temporariamente
+`Registration__Enabled=true` no backend e envie um `POST /api/auth/register`.
+Desabilite a opção imediatamente após o bootstrap; mantê-la habilitada em uma
+instância pública permite cadastro por qualquer visitante.
 
 ## Executar em desenvolvimento
 
@@ -167,11 +186,15 @@ O arquivo `.env.production` não deve ser versionado. Use
 `.github/workflows/ci-cd.yml` recebe os segredos pelos Repository secrets do
 GitHub e faz deploy por um runner self-hosted no Ubuntu.
 
+Todas as credenciais de PostgreSQL, JWT, Pluggy e Telegram pertencem à instalação
+e devem ser fornecidas por variáveis de ambiente ou GitHub Actions Secrets. O
+repositório não contém banco, dados financeiros nem credenciais de produção.
+
 ## Endpoints principais
 
 Em desenvolvimento, a especificação OpenAPI exposta pela API é a fonte de verdade.
 
-- `/api/auth`: login, refresh, logout e usuário autenticado; o endpoint de cadastro responde `403` permanentemente.
+- `/api/auth`: cadastro configurável, login, refresh, logout e usuário autenticado.
 - `/api/households`: núcleo familiar, membros e convites.
 - `/api/households/{householdId}/accounts`: contas, saldos e histórico.
 - `/api/households/{householdId}/categories`: categorias padrão e personalizadas.
@@ -185,3 +208,10 @@ Em desenvolvimento, a especificação OpenAPI exposta pela API é a fonte de ver
 Todos os endpoints financeiros deverão validar o `Household` do usuário
 autenticado; um identificador enviado pelo cliente nunca será suficiente para
 autorizar acesso.
+
+## Contribuição e segurança
+
+Contribuições são bem-vindas por pull request. A branch `main` é protegida e
+alterações de terceiros exigem revisão do mantenedor definido em
+`.github/CODEOWNERS`. Não abra uma issue pública contendo vulnerabilidades,
+tokens ou dados financeiros; siga as orientações de [SECURITY.md](SECURITY.md).

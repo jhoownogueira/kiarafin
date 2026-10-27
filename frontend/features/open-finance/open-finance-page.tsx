@@ -8,13 +8,10 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { authQueryKey, authService } from "@/features/auth/auth-service"
 import { getApiErrorMessage } from "@/lib/api/errors"
 import { formatDateInSaoPaulo, formatDateTime } from "@/lib/formatters"
 import { openFinanceKeys, openFinanceService } from "@/features/open-finance/open-finance-service"
 import type { PluggyIntegrationPreview, PluggyIntegrationState } from "@/features/open-finance/types"
-
-const AUTHORIZED_EMAIL = "jhoownogueira@outlook.com"
 
 const stateLabel: Record<PluggyIntegrationState, string> = {
   Disabled: "Desativada",
@@ -29,17 +26,6 @@ const stateLabel: Record<PluggyIntegrationState, string> = {
 const busyStates: PluggyIntegrationState[] = ["InitialSync", "Syncing"]
 
 export function OpenFinancePage() {
-  const session = useQuery({ queryKey: authQueryKey, queryFn: authService.me, retry: false })
-
-  if (session.isPending) return <p className="text-sm text-muted-foreground">Verificando acesso…</p>
-  if (session.data?.email.toLowerCase() !== AUTHORIZED_EMAIL) {
-    return <Card><CardContent className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><ShieldCheck className="size-10 text-muted-foreground" /><h1 className="mt-4 font-heading text-2xl font-semibold">Acesso restrito</h1><p className="mt-2 max-w-md text-sm text-muted-foreground">Esta integração não está disponível para este usuário.</p></CardContent></Card>
-  }
-
-  return <AuthorizedOpenFinancePage />
-}
-
-function AuthorizedOpenFinancePage() {
   const [renderedAt] = useState(() => Date.now())
   const [preview, setPreview] = useState<PluggyIntegrationPreview | null>(null)
   const [confirmationOpen, setConfirmationOpen] = useState(false)
