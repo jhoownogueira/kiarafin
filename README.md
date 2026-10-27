@@ -185,17 +185,3 @@ Em desenvolvimento, a especificação OpenAPI exposta pela API é a fonte de ver
 Todos os endpoints financeiros deverão validar o `Household` do usuário
 autenticado; um identificador enviado pelo cliente nunca será suficiente para
 autorizar acesso.
-
-## Roadmap
-
-- [x] Fundação: arquitetura modular, EF Core, PostgreSQL e migration inicial.
-- [x] Autenticação: JWT, refresh token rotativo, sessão e núcleo familiar.
-- [x] Financeiro: contas, categorias, transações e transferências.
-- [x] Planejamento: previsão de saldo, parcelas, cartões e faturas com pagamento integral.
-- [x] Experiência: dashboard, relatórios, responsividade e modos claro/escuro.
-- [x] Qualidade: testes críticos, revisão de segurança e documentação OpenAPI.
-- [x] Open Finance: importação e sincronização automática via Meu Pluggy.
-- [ ] Evolução: pagamento parcial de fatura e notificações.
-
-Marque itens apenas quando API, interface, persistência e validações associadas
-estiverem funcionais, sem dados mockados permanentes.
