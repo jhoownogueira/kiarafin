@@ -18,7 +18,7 @@ public sealed class PluggyOptions
     public string ClientSecret { get; set; } = "";
     public string ItemId { get; set; } = "";
     public string WebhookSecret { get; set; } = "";
-    public string AuthorizedEmail { get; set; } = "jhoownogueira@outlook.com";
+    public string AuthorizedEmail { get; set; } = "";
     public int SyncIntervalHours { get; set; } = 24;
 }
 

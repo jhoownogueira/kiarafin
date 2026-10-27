@@ -36,7 +36,7 @@ public sealed class PluggyWebhookTests
     public async Task Repeated_event_is_idempotent()
     {
         await using var db = CreateDatabase();
-        var user = new User("Owner", "jhoownogueira@outlook.com", "JHOOWNOGUEIRA@OUTLOOK.COM", "hash");
+        var user = new User("Owner", "owner@example.test", "OWNER@EXAMPLE.TEST", "hash");
         var household = new Household("Casa", user.Id);
         var integration = new FinancialIntegration(user.Id, household.Id, "PLUGGY", "item-1");
         integration.Complete(1, 1, DateTime.UtcNow.AddMonths(6), DateTime.UtcNow);

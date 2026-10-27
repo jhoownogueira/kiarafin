@@ -76,6 +76,8 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddSingleton<IRequestOriginValidator, RequestOriginValidator>();
+builder.Services.AddOptions<RegistrationOptions>()
+    .Bind(builder.Configuration.GetSection(RegistrationOptions.SectionName));
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<HouseholdService>();
 builder.Services.AddScoped<HouseholdAccessService>();
@@ -93,10 +95,10 @@ builder.Services.AddOptions<TelegramNotificationOptions>()
     .Bind(builder.Configuration.GetSection(TelegramNotificationOptions.SectionName))
     .Validate(x => !x.Enabled || !string.IsNullOrWhiteSpace(x.BotToken),
         "TelegramNotifications:BotToken é obrigatório quando as notificações estão habilitadas.")
-    .Validate(x => !x.Enabled || x.ChatId == 734302182,
-        "TelegramNotifications:ChatId deve identificar o destinatário autorizado.")
-    .Validate(x => !x.Enabled || string.Equals(x.AuthorizedEmail, "jhoownogueira@outlook.com", StringComparison.OrdinalIgnoreCase),
-        "TelegramNotifications:AuthorizedEmail deve identificar o usuário autorizado.")
+    .Validate(x => !x.Enabled || x.ChatId != 0,
+        "TelegramNotifications:ChatId é obrigatório quando as notificações estão habilitadas.")
+    .Validate(x => !x.Enabled || !string.IsNullOrWhiteSpace(x.AuthorizedEmail),
+        "TelegramNotifications:AuthorizedEmail é obrigatório quando as notificações estão habilitadas.")
     .Validate(x => Uri.TryCreate(x.BaseUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps,
         "TelegramNotifications:BaseUrl deve ser uma URL HTTPS.")
     .ValidateOnStart();
@@ -115,8 +117,9 @@ builder.Services.AddHostedService<ApplicationStartupNotificationService>();
 builder.Services.AddOptions<PluggyOptions>()
     .Bind(builder.Configuration.GetSection(PluggyOptions.SectionName))
     .Validate(x => !x.Enabled || (!string.IsNullOrWhiteSpace(x.ClientId) && !string.IsNullOrWhiteSpace(x.ClientSecret)
-        && !string.IsNullOrWhiteSpace(x.ItemId) && !string.IsNullOrWhiteSpace(x.WebhookSecret)),
-        "Credenciais, ItemId e segredo de webhook Pluggy são obrigatórios quando a integração está habilitada.")
+        && !string.IsNullOrWhiteSpace(x.ItemId) && !string.IsNullOrWhiteSpace(x.WebhookSecret)
+        && !string.IsNullOrWhiteSpace(x.AuthorizedEmail)),
+        "Credenciais, ItemId, segredo de webhook e e-mail autorizado Pluggy são obrigatórios quando a integração está habilitada.")
     .Validate(x => x.SyncIntervalHours is >= 1 and <= 168, "Pluggy:SyncIntervalHours inválido.")
     .ValidateOnStart();
 builder.Services.AddHttpClient<IPluggyClient, PluggyClient>((services, client) =>

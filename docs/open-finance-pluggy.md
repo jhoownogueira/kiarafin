@@ -5,11 +5,11 @@ uma nova conexão bancária no frontend e não solicita atualização manual do
 Item. A atualização normal vem do provedor, por webhooks, com uma verificação
 periódica de contingência a cada 24 horas por padrão.
 
-A integração é restrita ao usuário `jhoownogueira@outlook.com`. As rotas de
-consulta, prévia e ativação exigem autenticação e conferem o proprietário no
-backend. O Item configurado também é validado antes de qualquer importação.
-O cadastro de novos usuários do KiaraFin é permanentemente desativado no backend; isso não interfere no
-login das contas existentes nem amplia quem pode acessar a integração.
+A integração é restrita ao usuário definido em `PLUGGY_AUTHORIZED_EMAIL`. As
+rotas de consulta, prévia e ativação exigem autenticação e conferem esse
+proprietário no backend. O Item configurado também é validado antes de qualquer
+importação. O cadastro de usuários é uma configuração independente e permanece
+desativado por padrão.
 
 ## Configuração
 
@@ -23,7 +23,7 @@ O backend lê estas opções:
 | `Pluggy:ClientSecret` | `PLUGGY_CLIENT_SECRET` | Secret | sem valor |
 | `Pluggy:ItemId` | `PLUGGY_ITEM_ID` | Secret | sem valor |
 | `Pluggy:WebhookSecret` | `PLUGGY_WEBHOOK_SECRET` | Secret | sem valor |
-| `Pluggy:AuthorizedEmail` | `PLUGGY_AUTHORIZED_EMAIL` | Secret | `jhoownogueira@outlook.com` |
+| `Pluggy:AuthorizedEmail` | `PLUGGY_AUTHORIZED_EMAIL` | Secret | sem valor |
 | `Pluggy:SyncIntervalHours` | `PLUGGY_SYNC_INTERVAL_HOURS` | Secret | `24` |
 
 Em variáveis de ambiente .NET, `:` é representado por `__`; por exemplo,
@@ -88,10 +88,11 @@ mesmo conjunto de origem deve produzir o mesmo estado sem duplicações.
 
 Quando as notificações Telegram estão habilitadas, uma sincronização bem-sucedida
 que altere contas, cartões ou lançamentos envia um resumo privado ao chat
-`734302182`. A API também valida o e-mail `jhoownogueira@outlook.com`; não existe
-endpoint de entrada do Telegram, portanto mensagens de outros usuários não são
-processadas nem respondidas. O token do bot permanece somente no backend como
-secret e nunca é incluído no frontend ou nos logs da aplicação.
+definido em `TELEGRAM_CHAT_ID`. A API também valida o e-mail configurado em
+`TELEGRAM_AUTHORIZED_EMAIL`; não existe endpoint de entrada do Telegram,
+portanto mensagens de outros usuários não são processadas nem respondidas. O
+token do bot permanece somente no backend como secret e nunca é incluído no
+frontend ou nos logs da aplicação.
 
 Webhooks apenas registram/disparam trabalho persistente e respondem rapidamente.
 O worker consulta a API autenticada antes de aplicar mudanças quando o evento

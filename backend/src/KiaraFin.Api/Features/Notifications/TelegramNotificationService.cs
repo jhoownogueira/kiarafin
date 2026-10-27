@@ -12,7 +12,7 @@ public sealed class TelegramNotificationOptions
     public string BaseUrl { get; set; } = "https://api.telegram.org";
     public string BotToken { get; set; } = "";
     public long ChatId { get; set; }
-    public string AuthorizedEmail { get; set; } = "jhoownogueira@outlook.com";
+    public string AuthorizedEmail { get; set; } = "";
 }
 
 public sealed record AccountUpdateNotification(
@@ -58,16 +58,12 @@ public sealed class TelegramNotificationService(
     IOptions<TelegramNotificationOptions> options,
     ILogger<TelegramNotificationService> logger) : IAccountNotificationService
 {
-    private const long AllowedChatId = 734302182;
-    private const string AllowedEmail = "jhoownogueira@outlook.com";
     private readonly TelegramNotificationOptions _options = options.Value;
 
     public async Task NotifyAsync(AccountUpdateNotification notification, CancellationToken cancellationToken)
     {
         if (!_options.Enabled || !notification.HasChanges ||
-            _options.ChatId != AllowedChatId ||
-            !string.Equals(_options.AuthorizedEmail, AllowedEmail, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(notification.Email, AllowedEmail, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(notification.Email, _options.AuthorizedEmail, StringComparison.OrdinalIgnoreCase))
             return;
 
         await SendAsync(BuildMessage(notification), cancellationToken);
@@ -77,9 +73,7 @@ public sealed class TelegramNotificationService(
         BalanceForecastNotification notification, CancellationToken cancellationToken)
     {
         if (!_options.Enabled ||
-            _options.ChatId != AllowedChatId ||
-            !string.Equals(_options.AuthorizedEmail, AllowedEmail, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(notification.Email, AllowedEmail, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(notification.Email, _options.AuthorizedEmail, StringComparison.OrdinalIgnoreCase))
             return;
         if (notification.Reason != BalanceForecastNotificationReason.ApplicationStarted &&
             notification.PreviousResult == notification.Result)
@@ -125,7 +119,7 @@ public sealed class TelegramNotificationService(
                 $"/bot{_options.BotToken}/sendMessage",
                 new
                 {
-                    chat_id = AllowedChatId,
+                    chat_id = _options.ChatId,
                     text,
                     parse_mode = "HTML",
                     disable_web_page_preview = true

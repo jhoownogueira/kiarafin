@@ -98,18 +98,19 @@ Adicione estes repository secrets:
 | `POSTGRES_PASSWORD` | Senha forte do usuário PostgreSQL |
 | `JWT_KEY` | Chave aleatória com pelo menos 32 bytes |
 | `PUBLIC_ORIGIN` | URL pública exata, por exemplo `https://financas.exemplo.com.br` |
+| `REGISTRATION_ENABLED` | `false` por padrão; habilite temporariamente somente para criar a primeira conta |
 | `PLUGGY_CLIENT_ID` | Client ID da aplicação Pluggy |
 | `PLUGGY_CLIENT_SECRET` | Client Secret da aplicação Pluggy |
 | `PLUGGY_WEBHOOK_SECRET` | Segredo aleatório enviado no cabeçalho configurado do webhook |
 | `PLUGGY_ENABLED` | `false` inicialmente; altere para `true` somente após validar toda a configuração |
 | `PLUGGY_ITEM_ID` | Item previamente autorizado no Meu Pluggy |
 | `PLUGGY_BASE_URL` | Opcional; padrão `https://api.pluggy.ai` |
-| `PLUGGY_AUTHORIZED_EMAIL` | `jhoownogueira@outlook.com` |
+| `PLUGGY_AUTHORIZED_EMAIL` | E-mail da conta autorizada a operar a integração |
 | `PLUGGY_SYNC_INTERVAL_HOURS` | `24` |
 | `TELEGRAM_NOTIFICATIONS_ENABLED` | `true` para habilitar os avisos privados |
 | `TELEGRAM_BOT_TOKEN` | Token novo gerado pelo BotFather; nunca salve no repositório |
-| `TELEGRAM_CHAT_ID` | `734302182` |
-| `TELEGRAM_AUTHORIZED_EMAIL` | `jhoownogueira@outlook.com` |
+| `TELEGRAM_CHAT_ID` | Identificador numérico do chat que receberá as notificações |
+| `TELEGRAM_AUTHORIZED_EMAIL` | E-mail da conta cujos eventos podem gerar notificações |
 
 Os secrets Pluggy podem ser cadastrados antes da ativação; o pipeline só exige
 as credenciais obrigatórias quando `PLUGGY_ENABLED` for `true`. O workflow não
@@ -125,6 +126,22 @@ openssl rand -base64 48 | tr -d '\n'
 
 Use um valor para a senha e outro para a chave JWT. Não salve esses valores no
 repositório.
+
+### Criar a primeira conta
+
+Em um banco vazio, defina temporariamente `REGISTRATION_ENABLED=true`, suba a
+aplicação e crie a conta inicial pela API:
+
+```bash
+curl --fail-with-body \
+  --request POST \
+  --url "https://SEU-DOMINIO/api/auth/register" \
+  --header "Content-Type: application/json" \
+  --data '{"name":"Seu nome","email":"voce@exemplo.com","password":"TROQUE-ESTA-SENHA","confirmPassword":"TROQUE-ESTA-SENHA"}'
+```
+
+Depois, volte `REGISTRATION_ENABLED=false` e faça novo deploy. Não deixe o
+cadastro habilitado continuamente em uma aplicação exposta à internet.
 
 ## 4. Primeira inicialização manual do PostgreSQL
 

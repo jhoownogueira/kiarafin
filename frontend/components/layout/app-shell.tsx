@@ -28,13 +28,9 @@ const navigation = [
   { label: "Relatórios", href: "/relatorios", icon: BarChart3 },
 ] as const
 
-const AUTHORIZED_OPEN_FINANCE_EMAIL = "jhoownogueira@outlook.com"
-
-function NavContent({ user, onNavigate }: { user: AuthUser; onNavigate?: () => void }) {
+function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
-  const items = user.email.toLowerCase() === AUTHORIZED_OPEN_FINANCE_EMAIL
-    ? [...navigation, { label: "Open Finance", href: "/configuracoes/open-finance", icon: Settings }]
-    : navigation
+  const items = [...navigation, { label: "Open Finance", href: "/configuracoes/open-finance", icon: Settings }]
   return (
     <nav aria-label="Navegação principal" className="space-y-1">
       {items.map((item) => {
@@ -66,7 +62,7 @@ export function AppShell({ user, children }: { user: AuthUser; children: ReactNo
     <div className="min-h-dvh md:grid md:grid-cols-[260px_1fr]">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] flex-col border-r border-sidebar-border bg-sidebar p-4 text-sidebar-foreground md:flex">
         <div className="mb-8 rounded-xl bg-brand-canvas p-2.5"><BrandLogo className="h-11 w-[190px]" priority /></div>
-        <div className="flex-1"><NavContent user={user} /></div>
+        <div className="flex-1"><NavContent /></div>
         <div className="border-t border-sidebar-border pt-4">
           <div className="mb-3 flex items-center gap-3 px-2">
             <div className="flex size-9 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">{initials}</div>
@@ -86,7 +82,7 @@ export function AppShell({ user, children }: { user: AuthUser; children: ReactNo
                 <Dialog.Content className="fixed inset-y-0 left-0 z-50 flex w-[min(88vw,320px)] flex-col border-r border-sidebar-border bg-sidebar p-4 text-sidebar-foreground shadow-2xl data-[state=open]:animate-in data-[state=open]:slide-in-from-left data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left">
                   <Dialog.Title className="sr-only">Menu principal</Dialog.Title>
                   <div className="mb-8 flex items-center justify-between rounded-xl bg-brand-canvas p-2.5"><BrandLogo className="h-10 w-[175px]" /><Dialog.Close asChild><Button variant="ghost" size="icon" className="text-brand-ink" aria-label="Fechar menu"><X /></Button></Dialog.Close></div>
-                  <div className="flex-1"><NavContent user={user} onNavigate={() => setMobileOpen(false)} /></div>
+                  <div className="flex-1"><NavContent onNavigate={() => setMobileOpen(false)} /></div>
                   <Button variant="ghost" className="justify-start" onClick={() => logout.mutate()}><LogOut />Sair</Button>
                 </Dialog.Content>
               </Dialog.Portal>
@@ -94,7 +90,7 @@ export function AppShell({ user, children }: { user: AuthUser; children: ReactNo
             <BrandLogo variant="icon" className="h-9 w-10 rounded-lg bg-brand-canvas p-1" />
           </div>
           <div className="hidden md:block"><p className="text-sm text-muted-foreground">{selectedHousehold?.name ?? "Meu núcleo financeiro"}</p></div>
-          <div className="flex items-center gap-2">{user.email.toLowerCase() === AUTHORIZED_OPEN_FINANCE_EMAIL && <OpenFinanceIndicator />}<ThemeToggle /></div>
+          <div className="flex items-center gap-2"><OpenFinanceIndicator /><ThemeToggle /></div>
         </header>
         <main className="mx-auto w-full max-w-[1440px] p-4 sm:p-6 md:p-8">{children}</main>
       </div>

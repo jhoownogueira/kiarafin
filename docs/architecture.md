@@ -94,6 +94,8 @@ manutenção. A API não chama `EnsureCreated()` nem atualiza schema no startup.
   ambiente de desenvolvimento.
 - Validação de origem nos endpoints que usam cookie e CORS limitado à origem
   conhecida do frontend.
+- Cadastro público desativado por padrão e controlado por configuração apenas
+  para o bootstrap consciente de novas instalações.
 
 ## Frontend
 
@@ -154,7 +156,7 @@ Os grupos abaixo estão implementados. Os recursos financeiros usam a rota base
 
 | Grupo | Operações previstas |
 | --- | --- |
-| `/api/auth` | login, refresh, logout e me; `register` permanece apenas como resposta `403` permanente |
+| `/api/auth` | cadastro configurável, login, refresh, logout e me |
 | `/api/households` | current, members, invites, accept invite |
 | `/api/households/{householdId}/accounts` | CRUD, saldo e histórico |
 | `/api/households/{householdId}/categories` | listagem e CRUD de categorias próprias |

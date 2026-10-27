@@ -3,6 +3,12 @@ using KiaraFin.Api.Features.Identity;
 
 namespace KiaraFin.Api.Features.Auth;
 
+public sealed class RegistrationOptions
+{
+    public const string SectionName = "Registration";
+    public bool Enabled { get; set; }
+}
+
 public sealed record RegisterRequest(
     [Required, StringLength(150, MinimumLength = 2)] string Name,
     [Required, EmailAddress, StringLength(320)] string Email,
