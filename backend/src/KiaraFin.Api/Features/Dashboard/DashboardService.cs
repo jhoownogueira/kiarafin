@@ -124,7 +124,7 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
         var officialInvoices = await dbContext.Invoices.AsNoTracking().Where(x =>
                 x.HouseholdId == householdId && x.DueDate <= invoiceLookupThrough &&
                 x.Status != InvoiceStatus.Paid && x.Status != InvoiceStatus.Canceled)
-            .Select(x => new { CardId = x.CreditCardId, x.DueDate, Amount = x.TotalAmount })
+            .Select(x => new { x.Id, CardId = x.CreditCardId, x.DueDate, Amount = x.TotalAmount })
             .ToListAsync(cancellationToken);
 
         var cards = await dbContext.CreditCards.AsNoTracking().Where(x =>
@@ -157,6 +157,61 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
                 x => (x.Key.CardId, x.Key.Year, x.Key.Month),
                 x => x.Sum(item => item.Amount));
 
+        var invoiceDueDates = await dbContext.Invoices.AsNoTracking()
+            .Where(x => x.HouseholdId == householdId && cardIds.Contains(x.CreditCardId))
+            .ToDictionaryAsync(x => x.Id, x => x.DueDate, cancellationToken);
+        var installmentEntries = await dbContext.FinancialTransactions.AsNoTracking().Where(x =>
+                x.HouseholdId == householdId && x.CreditCardId != null &&
+                cardIds.Contains(x.CreditCardId.Value) && x.InstitutionControlled && !x.IsRefund &&
+                x.Status != FinancialTransactionStatus.Canceled &&
+                x.InstallmentNumber != null && x.InstallmentCount != null)
+            .Select(x => new
+            {
+                CardId = x.CreditCardId!.Value,
+                x.Description,
+                x.Amount,
+                x.InstallmentNumber,
+                x.InstallmentCount,
+                x.CategoryId,
+                x.ResponsibleUserId,
+                x.CompetenceDate,
+                x.InvoiceId
+            })
+            .ToListAsync(cancellationToken);
+        var projectedInstallmentAmounts = new Dictionary<(Guid CardId, int Year, int Month), decimal>();
+        var installmentGroups = installmentEntries.GroupBy(x => new
+        {
+            x.CardId,
+            Description = x.Description.Trim().ToUpperInvariant(),
+            x.Amount,
+            x.InstallmentCount,
+            x.CategoryId,
+            x.ResponsibleUserId
+        });
+        foreach (var group in installmentGroups)
+        {
+            var latest = group.OrderByDescending(x => x.InstallmentNumber)
+                .ThenByDescending(x => x.CompetenceDate)
+                .First();
+            var currentNumber = latest.InstallmentNumber!.Value;
+            var count = latest.InstallmentCount!.Value;
+            if (currentNumber >= count) continue;
+            var baseDueDate = latest.InvoiceId is Guid invoiceId && invoiceDueDates.TryGetValue(invoiceId, out var dueDate)
+                ? dueDate
+                : EstimateFormingInvoiceDueDate(latest.CompetenceDate, cardDueDays[latest.CardId], today);
+            var knownNumbers = group.Select(x => x.InstallmentNumber!.Value).ToHashSet();
+            for (var number = currentNumber + 1; number <= count; number++)
+            {
+                if (knownNumbers.Contains(number)) continue;
+                var dueDateForInstallment = baseDueDate.AddMonths(number - currentNumber);
+                var period = ResolveInvoiceForecastPeriod(dueDateForInstallment, projectionStart);
+                if (period > projectionThrough) continue;
+                var key = (latest.CardId, period.Year, period.Month);
+                projectedInstallmentAmounts[key] =
+                    projectedInstallmentAmounts.GetValueOrDefault(key) + latest.Amount;
+            }
+        }
+
         var paidInvoices = await dbContext.Invoices.AsNoTracking().Where(x =>
                 x.HouseholdId == householdId && cardIds.Contains(x.CreditCardId) &&
                 x.Status == InvoiceStatus.Paid && x.TotalAmount > 0)
@@ -184,9 +239,14 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
             var actualInvoiceTotal = actualInvoiceAmounts
                 .Where(x => x.Key.Year == period.Year && x.Key.Month == period.Month)
                 .Sum(x => x.Value);
-            var estimatedInvoiceTotal = cardIds
-                .Where(cardId => !actualInvoiceAmounts.ContainsKey((cardId, period.Year, period.Month)))
+            var projectedInstallmentTotal = projectedInstallmentAmounts
+                .Where(x => x.Key.Year == period.Year && x.Key.Month == period.Month)
+                .Sum(x => x.Value);
+            var averageFallbackTotal = cardIds
+                .Where(cardId => !actualInvoiceAmounts.ContainsKey((cardId, period.Year, period.Month)) &&
+                                 !projectedInstallmentAmounts.ContainsKey((cardId, period.Year, period.Month)))
                 .Sum(cardId => averageByCard.GetValueOrDefault(cardId));
+            var estimatedInvoiceTotal = projectedInstallmentTotal + averageFallbackTotal;
             var net = salary + extraIncome - fixedExpenses - actualInvoiceTotal - estimatedInvoiceTotal;
             projectedBalance += net;
             return new BalanceForecastMonth(

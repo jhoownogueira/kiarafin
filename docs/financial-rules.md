@@ -78,6 +78,11 @@ usa a média de suas três últimas faturas pagas. Na ausência desse histórico
 valor atual conhecido é usado como referência. Assim que o Pluggy disponibiliza
 um valor real para o mês, ele substitui integralmente a estimativa daquele cartão.
 
+Parcelamentos informados pelo Open Finance são projetados até a última parcela.
+Esses compromissos conhecidos entram na previsão antes da média histórica. A
+média só é usada para um cartão e mês sem fatura oficial, compra em formação ou
+parcela projetada, evitando tanto omissão quanto dupla contagem.
+
 Uma compra já incluída em uma fatura prevista não é somada novamente como
 despesa pendente de caixa. Parcelas futuras entram pela fatura correspondente,
 nunca em duplicidade pelo valor total da compra.
