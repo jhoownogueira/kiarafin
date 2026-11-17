@@ -69,12 +69,12 @@ public sealed class ForecastTests
         Assert.Equal(5000m, result.BalanceForecast.Summary.MonthlySalary);
         Assert.Equal(100m, result.BalanceForecast.Summary.MonthlyExtraIncome);
         Assert.Equal(1000m, result.BalanceForecast.Summary.MonthlyFixedExpenses);
-        Assert.Equal(750m, result.BalanceForecast.Summary.KnownCardInvoices);
-        Assert.Equal(3750m, result.BalanceForecast.Summary.EstimatedCardInvoices);
-        Assert.Equal(750m, result.BalanceForecast.Months[0].CardInvoices);
+        Assert.Equal(250m, result.BalanceForecast.Summary.KnownCardInvoices);
+        Assert.Equal(1250m, result.BalanceForecast.Summary.EstimatedCardInvoices);
+        Assert.Equal(250m, result.BalanceForecast.Months[0].CardInvoices);
         Assert.Equal(0m, result.BalanceForecast.Months[0].EstimatedCardInvoices);
-        Assert.Equal(750m, result.BalanceForecast.Months[1].EstimatedCardInvoices);
-        Assert.Equal(20100m, result.BalanceForecast.Summary.ProjectedBalance);
+        Assert.Equal(250m, result.BalanceForecast.Months[1].EstimatedCardInvoices);
+        Assert.Equal(23100m, result.BalanceForecast.Summary.ProjectedBalance);
     }
 
     [Fact]
@@ -88,33 +88,34 @@ public sealed class ForecastTests
             fixture.User.Id, fixture.Account.Id);
         fixture.Db.CreditCards.Add(card);
         var dueDate = MonthlyDateCalculator.Resolve(today.Year, today.Month, 12);
-        var invoice = Invoice.CreateInstitutionControlled(
+        var previousInvoice = Invoice.CreateInstitutionControlled(
             fixture.Household.Id, card.Id, "PLUGGY", "invoice-installment",
-            dueDate.AddDays(-7), dueDate, 1000m, dueDate, DateTime.UtcNow);
-        var currentInvoiceDueDate = dueDate.AddMonths(1);
-        var currentInvoice = Invoice.CreateInstitutionControlled(
-            fixture.Household.Id, card.Id, "PLUGGY", "invoice-current",
-            currentInvoiceDueDate.AddDays(-7), currentInvoiceDueDate, 900m, null, DateTime.UtcNow);
-        fixture.Db.Invoices.AddRange(invoice, currentInvoice);
+            dueDate.AddDays(-7), dueDate, 10000m, null, DateTime.UtcNow);
+        fixture.Db.Invoices.Add(previousInvoice);
         var installment = FinancialTransaction.CreateInstitutionCreditCardEntry(
             fixture.Household.Id, "Gerson", 590m, fixture.ExpenseCategory.Id,
-            card.Id, invoice.Id, projectionStart.AddDays(1), fixture.User.Id,
+            card.Id, previousInvoice.Id, projectionStart.AddDays(1), fixture.User.Id,
             settled: true, isRefund: false);
         installment.MarkInstitutionControlled("PLUGGY", "gerson-6");
         installment.SetInstitutionInstallment(6, 10, DateTime.UtcNow);
-        fixture.Db.FinancialTransactions.Add(installment);
+        var formingPurchase = FinancialTransaction.CreateInstitutionCreditCardEntry(
+            fixture.Household.Id, "Compra atual", 100m, fixture.ExpenseCategory.Id,
+            card.Id, null, projectionStart.AddDays(1), fixture.User.Id,
+            settled: false, isRefund: false);
+        formingPurchase.MarkInstitutionControlled("PLUGGY", "forming-current");
+        fixture.Db.FinancialTransactions.AddRange(installment, formingPurchase);
         await fixture.Db.SaveChangesAsync();
 
         var result = await fixture.Dashboard.GetBalanceForecastAsync(fixture.Household.Id, default);
 
-        Assert.Equal(900m, result.Months[0].CardInvoices);
-        Assert.Equal(0m, result.Months[0].EstimatedCardInvoices);
+        Assert.Equal(100m, result.Months[0].CardInvoices);
+        Assert.Equal(590m, result.Months[0].EstimatedCardInvoices);
         Assert.Equal(590m, result.Months[1].EstimatedCardInvoices);
         Assert.Equal(590m, result.Months[2].EstimatedCardInvoices);
         Assert.Equal(590m, result.Months[3].EstimatedCardInvoices);
-        Assert.Equal(1000m, result.Months[4].EstimatedCardInvoices);
-        Assert.Equal(1000m, result.Months[5].EstimatedCardInvoices);
-        Assert.Equal(3770m, result.Summary.EstimatedCardInvoices);
+        Assert.Equal(100m, result.Months[4].EstimatedCardInvoices);
+        Assert.Equal(100m, result.Months[5].EstimatedCardInvoices);
+        Assert.Equal(2560m, result.Summary.EstimatedCardInvoices);
     }
 
     [Fact]

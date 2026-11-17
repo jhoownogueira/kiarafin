@@ -142,16 +142,15 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
             .ToListAsync(cancellationToken);
 
         var actualInvoiceAmounts = officialInvoices
-            .Select(x => new { x.CardId, Period = ResolveInvoiceForecastPeriod(x.DueDate, projectionStart), x.Amount })
+            .Select(x => new { x.CardId, Period = ResolveInvoiceForecastPeriod(x.DueDate), x.Amount })
             .Concat(formingPurchases.Select(x => new
             {
                 x.CardId,
                 Period = ResolveInvoiceForecastPeriod(
-                    EstimateFormingInvoiceDueDate(x.CompetenceDate, cardDueDays[x.CardId], today),
-                    projectionStart),
+                    EstimateFormingInvoiceDueDate(x.CompetenceDate, cardDueDays[x.CardId], today)),
                 Amount = x.IsRefund ? -x.Amount : x.Amount
             }))
-            .Where(x => x.Period <= projectionThrough)
+            .Where(x => x.Period >= projectionStart && x.Period <= projectionThrough)
             .GroupBy(x => new { x.CardId, x.Period.Year, x.Period.Month })
             .ToDictionary(
                 x => (x.Key.CardId, x.Key.Year, x.Key.Month),
@@ -204,8 +203,8 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
             {
                 if (knownNumbers.Contains(number)) continue;
                 var dueDateForInstallment = baseDueDate.AddMonths(number - currentNumber);
-                var period = ResolveInvoiceForecastPeriod(dueDateForInstallment, projectionStart);
-                if (period > projectionThrough) continue;
+                var period = ResolveInvoiceForecastPeriod(dueDateForInstallment);
+                if (period < projectionStart || period > projectionThrough) continue;
                 var key = (latest.CardId, period.Year, period.Month);
                 projectedInstallmentAmounts[key] =
                     projectedInstallmentAmounts.GetValueOrDefault(key) + latest.Amount;
@@ -240,8 +239,7 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
                 .Where(x => x.Key.Year == period.Year && x.Key.Month == period.Month)
                 .Sum(x => x.Value);
             var projectedInstallmentTotal = projectedInstallmentAmounts
-                .Where(x => x.Key.Year == period.Year && x.Key.Month == period.Month &&
-                            !actualInvoiceAmounts.ContainsKey(x.Key))
+                .Where(x => x.Key.Year == period.Year && x.Key.Month == period.Month)
                 .Sum(x => x.Value);
             var averageFallbackTotal = cardIds
                 .Where(cardId => !actualInvoiceAmounts.ContainsKey((cardId, period.Year, period.Month)) &&
@@ -264,11 +262,10 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
             entries);
     }
 
-    private static DateOnly ResolveInvoiceForecastPeriod(DateOnly dueDate, DateOnly projectionStart)
+    private static DateOnly ResolveInvoiceForecastPeriod(DateOnly dueDate)
     {
         var dueMonth = new DateOnly(dueDate.Year, dueDate.Month, 1);
-        var statementMonth = dueMonth.AddMonths(-1);
-        return statementMonth < projectionStart ? projectionStart : statementMonth;
+        return dueMonth.AddMonths(-1);
     }
 
     private static DateOnly EstimateFormingInvoiceDueDate(DateOnly competenceDate, int dueDay, DateOnly today)
