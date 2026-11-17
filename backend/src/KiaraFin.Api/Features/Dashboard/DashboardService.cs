@@ -240,7 +240,8 @@ public sealed class DashboardService(AppDbContext dbContext, HouseholdAccessServ
                 .Where(x => x.Key.Year == period.Year && x.Key.Month == period.Month)
                 .Sum(x => x.Value);
             var projectedInstallmentTotal = projectedInstallmentAmounts
-                .Where(x => x.Key.Year == period.Year && x.Key.Month == period.Month)
+                .Where(x => x.Key.Year == period.Year && x.Key.Month == period.Month &&
+                            !actualInvoiceAmounts.ContainsKey(x.Key))
                 .Sum(x => x.Value);
             var averageFallbackTotal = cardIds
                 .Where(cardId => !actualInvoiceAmounts.ContainsKey((cardId, period.Year, period.Month)) &&
