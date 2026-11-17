@@ -371,13 +371,60 @@ public sealed class CreditCardService(
                 .OrderBy(x => x.CompetenceDate)
                 .ThenBy(x => x.CreatedAtUtc)
                 .ToListAsync(cancellationToken);
-            formingInvoices = pendingPurchases
+            var formingPurchases = pendingPurchases
                 .GroupBy(x => EstimateDueDate(x.CompetenceDate, dueDay, BusinessDate.Today()))
+                .ToDictionary(group => group.Key, group => group.Select(MapPurchase).ToList());
+
+            var installmentEntries = await dbContext.Set<FinancialTransaction>().AsNoTracking()
+                .Where(x => x.CreditCardId == card.Id && x.InstitutionControlled && !x.IsRefund &&
+                            x.Status != FinancialTransactionStatus.Canceled &&
+                            x.InstallmentNumber != null && x.InstallmentCount != null)
+                .ToListAsync(cancellationToken);
+            var invoiceDueDates = invoices.ToDictionary(x => x.Id, x => x.DueDate);
+            var installmentGroups = installmentEntries.GroupBy(x => new
+            {
+                Description = x.Description.Trim().ToUpperInvariant(),
+                x.Amount,
+                x.InstallmentCount,
+                x.CategoryId,
+                x.ResponsibleUserId
+            });
+            foreach (var group in installmentGroups)
+            {
+                var latest = group.OrderByDescending(x => x.InstallmentNumber)
+                    .ThenByDescending(x => x.CompetenceDate)
+                    .First();
+                var currentNumber = latest.InstallmentNumber!.Value;
+                var count = latest.InstallmentCount!.Value;
+                if (currentNumber >= count) continue;
+                var baseDueDate = latest.InvoiceId is Guid invoiceId && invoiceDueDates.TryGetValue(invoiceId, out var dueDate)
+                    ? dueDate
+                    : EstimateDueDate(latest.CompetenceDate, dueDay, BusinessDate.Today());
+                var knownNumbers = group.Select(x => x.InstallmentNumber!.Value).ToHashSet();
+                for (var number = currentNumber + 1; number <= count; number++)
+                {
+                    if (knownNumbers.Contains(number)) continue;
+                    var monthOffset = number - currentNumber;
+                    var expectedDueDate = baseDueDate.AddMonths(monthOffset);
+                    if (!formingPurchases.TryGetValue(expectedDueDate, out var purchases))
+                    {
+                        purchases = [];
+                        formingPurchases.Add(expectedDueDate, purchases);
+                    }
+                    purchases.Add(new InvoicePurchaseResponse(
+                        latest.Id, null, null, latest.Description, latest.Amount,
+                        latest.Amount * count, latest.CompetenceDate.AddMonths(monthOffset),
+                        latest.CategoryId!.Value, latest.ResponsibleUserId, latest.Scope,
+                        number, count, false, true));
+                }
+            }
+
+            formingInvoices = formingPurchases
                 .OrderBy(x => x.Key)
                 .Select(group => new FormingInvoiceResponse(
                     group.Key,
-                    group.Sum(x => x.IsRefund ? -x.Amount : x.Amount),
-                    group.Select(MapPurchase).ToList()))
+                    group.Value.Sum(x => x.IsRefund ? -x.Amount : x.Amount),
+                    group.Value))
                 .ToList();
         }
         var activeInvoiceIds = invoices

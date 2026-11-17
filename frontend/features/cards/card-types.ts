@@ -23,6 +23,7 @@ export type InvoicePurchase = {
   installmentNumber: number | null
   installmentCount: number | null
   isRefund: boolean
+  isProjected: boolean
 }
 
 export type InvoiceDetail = {

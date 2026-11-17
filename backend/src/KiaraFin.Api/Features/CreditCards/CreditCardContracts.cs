@@ -81,7 +81,8 @@ public sealed record InvoicePurchaseResponse(
     ExpenseScope Scope,
     int? InstallmentNumber,
     int? InstallmentCount,
-    bool IsRefund);
+    bool IsRefund,
+    bool IsProjected = false);
 
 public sealed record FormingInvoiceResponse(
     DateOnly ExpectedDueDate,
