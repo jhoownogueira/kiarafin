@@ -117,6 +117,42 @@ public sealed class PluggyIntegrationTests
     }
 
     [Fact]
+    public async Task Remaining_card_installments_are_projected_into_future_invoices()
+    {
+        await using var db = CreateDatabase();
+        var (user, household) = await SeedOwnerAsync(db);
+        var card = new PluggyAccount("card-1", "CREDIT", "Visa", "Banco", 590m,
+            "CREDIT_CARD", "card-hash", 5000m, 4410m, new DateOnly(2026, 11, 5),
+            new DateOnly(2026, 11, 12), "VISA", "ACTIVE");
+        var purchase = Transaction("gerson-6", 590m, "DEBIT", "PURCHASE", "POSTED") with
+        {
+            AccountId = "card-1", BillId = "bill-nov", Description = "Gerson",
+            Date = new DateOnly(2026, 10, 20), InstallmentNumber = 6, InstallmentCount = 10
+        };
+        var bill = new PluggyBill("bill-nov", "card-1", new DateOnly(2026, 11, 12),
+            new DateOnly(2026, 11, 5), 590m, null, "bill-hash");
+        var snapshot = new PluggySnapshot(
+            new PluggyItem("item-1", "UPDATED", DateTime.UtcNow.AddMonths(6), "Banco", null),
+            [card], [purchase], [bill]);
+
+        await CreateService(db, user, new StubClient(snapshot)).ActivateAsync(true, default);
+        var currentUser = new StubCurrentUser(user.Id);
+        var cards = new CreditCardService(db, currentUser, new InstallmentService(db, currentUser));
+        var importedCard = await db.CreditCards.SingleAsync();
+
+        var response = await cards.GetAsync(household.Id, importedCard.Id, default);
+
+        Assert.Equal(4, response.FormingInvoices.Count);
+        var december = response.FormingInvoices.Single(x => x.ExpectedDueDate == new DateOnly(2026, 12, 12));
+        var projected = Assert.Single(december.Purchases);
+        Assert.Equal("Gerson", projected.Description);
+        Assert.Equal(590m, projected.Amount);
+        Assert.Equal(7, projected.InstallmentNumber);
+        Assert.Equal(10, projected.InstallmentCount);
+        Assert.True(projected.IsProjected);
+    }
+
+    [Fact]
     public async Task Missing_transaction_is_preserved_until_deleted_event_and_can_reappear()
     {
         await using var db = CreateDatabase();

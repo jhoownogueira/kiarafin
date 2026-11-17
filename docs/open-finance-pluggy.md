@@ -71,7 +71,11 @@ A normalização considera tipo de conta, tipo/status da transação e os dados
 efetivamente retornados pela instituição. Um sinal negativo isolado não é
 suficiente para classificar despesa. Pagamentos de fatura não viram nova despesa
 de consumo, e estornos ou cancelamentos não permanecem como consumo normal. A
-integração não cria parcelas, faturas, datas ou descrições ausentes na API.
+integração não persiste parcelas, faturas, datas ou descrições ausentes na API.
+Quando a instituição informa a posição e a quantidade total de um parcelamento,
+a tela projeta as parcelas restantes nas faturas futuras como valores
+provisórios. A projeção é substituída pelo lançamento oficial assim que ele é
+sincronizado, sem duplicar o valor.
 Contas `CREDIT` viram cartões; limites, saldos, fechamento e vencimento são
 anuláveis. Faturas só são criadas a partir do recurso `/bills`, e cada compra é
 vinculada a uma fatura apenas quando a Pluggy fornece o `billId` correspondente.
