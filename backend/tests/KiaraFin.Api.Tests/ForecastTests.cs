@@ -78,6 +78,42 @@ public sealed class ForecastTests
     }
 
     [Fact]
+    public async Task Dashboard_forecast_uses_remaining_installments_before_historical_average()
+    {
+        await using var fixture = await ForecastFixture.CreateAsync();
+        var today = BusinessDate.Today();
+        var projectionStart = new DateOnly(today.Year, today.Month, 1);
+        var card = new CreditCard(
+            fixture.Household.Id, "Cartão", 10000m, 5, 12,
+            fixture.User.Id, fixture.Account.Id);
+        fixture.Db.CreditCards.Add(card);
+        var dueDate = MonthlyDateCalculator.Resolve(today.Year, today.Month, 12);
+        var invoice = Invoice.CreateInstitutionControlled(
+            fixture.Household.Id, card.Id, "PLUGGY", "invoice-installment",
+            dueDate.AddDays(-7), dueDate, 1000m, dueDate, DateTime.UtcNow);
+        fixture.Db.Invoices.Add(invoice);
+        var installment = FinancialTransaction.CreateInstitutionCreditCardEntry(
+            fixture.Household.Id, "Gerson", 590m, fixture.ExpenseCategory.Id,
+            card.Id, invoice.Id, projectionStart.AddDays(1), fixture.User.Id,
+            settled: true, isRefund: false);
+        installment.MarkInstitutionControlled("PLUGGY", "gerson-6");
+        installment.SetInstitutionInstallment(6, 10, DateTime.UtcNow);
+        fixture.Db.FinancialTransactions.Add(installment);
+        await fixture.Db.SaveChangesAsync();
+
+        var result = await fixture.Dashboard.GetBalanceForecastAsync(fixture.Household.Id, default);
+
+        Assert.Equal(0m, result.Months[0].CardInvoices);
+        Assert.Equal(590m, result.Months[0].EstimatedCardInvoices);
+        Assert.Equal(590m, result.Months[1].EstimatedCardInvoices);
+        Assert.Equal(590m, result.Months[2].EstimatedCardInvoices);
+        Assert.Equal(590m, result.Months[3].EstimatedCardInvoices);
+        Assert.Equal(1000m, result.Months[4].EstimatedCardInvoices);
+        Assert.Equal(1000m, result.Months[5].EstimatedCardInvoices);
+        Assert.Equal(4360m, result.Summary.EstimatedCardInvoices);
+    }
+
+    [Fact]
     public async Task Changing_a_forecast_notifies_the_new_current_month_result()
     {
         await using var fixture = await ForecastFixture.CreateAsync();
