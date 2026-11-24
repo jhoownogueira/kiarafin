@@ -46,13 +46,11 @@ KiaraFin.Api/
 │   ├── Auth/
 │   ├── Households/
 │   ├── Accounts/
+│   ├── Cards/
 │   ├── Categories/
-│   ├── Transactions/
-│   ├── RecurringTransactions/
-│   ├── Installments/
-│   ├── CreditCards/
-│   ├── Dashboard/
-│   └── Reports/
+│   ├── Forecasts/
+│   ├── Notifications/
+│   └── Pluggy/
 └── Program.cs
 ```
 
@@ -77,8 +75,8 @@ derivar os núcleos permitidos da identidade autenticada. O backend valida a
 associação mesmo quando a rota ou o corpo contém `householdId`.
 
 Índices e constraints devem reforçar regras que não podem depender apenas da
-aplicação, incluindo e-mail normalizado único, token de convite único, refresh
-token único, ocorrência recorrente por período e parcela por compra/número.
+aplicação, incluindo e-mail normalizado único, refresh token único e
+identificador externo único por conta, cartão, fatura e lançamento.
 
 Migrations são versionadas em `Data/Migrations` e aplicadas por comando de
 manutenção. A API não chama `EnsureCreated()` nem atualiza schema no startup.
@@ -136,18 +134,13 @@ frontend/
 | Módulo | Responsabilidade principal |
 | --- | --- |
 | Auth | Credenciais, tokens e sessão |
-| Households | Membros, associação e convites |
-| Accounts | Contas e saldo de caixa |
-| Categories | Classificação estável do histórico |
-| Transactions | Receitas, despesas e transferências |
-| Forecasts | Premissas mensais isoladas dos lançamentos |
-| Installments | Divisão, compromisso e parcelas |
-| CreditCards | Compras, ciclos, faturas e pagamentos |
-| Dashboard | Visões agregadas por período |
-| Reports | Consultas analíticas e filtros |
-
-Dashboard e relatórios consultam os outros domínios, mas não são responsáveis
-por alterar lançamentos.
+| Households | Núcleo financeiro do usuário e verificação de acesso |
+| Accounts | Contas bancárias (Open Finance ou manuais) e movimentações |
+| Cards | Cartões, montagem da fatura atual, parcelas futuras e faturas fechadas |
+| Categories | Categorias do usuário |
+| Forecasts | Premissas mensais e previsão de saldo do mês |
+| Pluggy | Espelhamento do Item Open Finance, webhook e agendamento |
+| Notifications | Mensagens privadas pelo Telegram |
 
 ## Contratos HTTP
 
@@ -157,22 +150,18 @@ Os grupos abaixo estão implementados. Os recursos financeiros usam a rota base
 | Grupo | Operações previstas |
 | --- | --- |
 | `/api/auth` | cadastro configurável, login, refresh, logout e me |
-| `/api/households` | current, members, invites, accept invite |
-| `/api/households/{householdId}/accounts` | CRUD, saldo e histórico |
+| `/api/households/{householdId}/accounts` | CRUD de contas manuais, saldo e movimentações |
 | `/api/households/{householdId}/categories` | listagem e CRUD de categorias próprias |
-| `/api/households/{householdId}/transactions` | CRUD, liquidação, cancelamento e transferência |
-| `/api/households/{householdId}/forecasts` | CRUD de premissas mensais |
-| `/api/households/{householdId}/installments` | criação e consulta de parcelas |
-| `/api/households/{householdId}/credit-cards` | CRUD, compras, faturas e pagamentos |
-| `/api/households/{householdId}/dashboard` | resumo por mês e projeções |
-| `/api/households/{householdId}/reports` | agregações filtradas e paginadas |
+| `/api/households/{householdId}/forecasts` | CRUD de premissas mensais e `GET balance` |
+| `/api/households/{householdId}/cards` | listagem e detalhe das faturas |
+| `/api/integrations/pluggy` | status, prévia, ativação, sync e webhook |
 
 OpenAPI documentará os contratos concretos da implementação.
 
 ## Testes
 
-- A suíte xUnit cobre calendário de cartão, rateio de centavos, previsões,
-  saldo, projeção, autenticação e isolamento por `Household`.
+- A suíte xUnit cobre montagem das faturas, classificação de lançamentos de
+  cartão, leitura da Pluggy, sincronização espelhada, previsão e autenticação.
 - O teste de integração aceita uma conexão PostgreSQL isolada via
   `KIARAFIN_TEST_CONNECTION` e valida migration e precisão monetária.
 - O frontend é validado atualmente por lint, checagem TypeScript e build de

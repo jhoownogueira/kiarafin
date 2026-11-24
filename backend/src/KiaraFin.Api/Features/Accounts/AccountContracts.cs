@@ -3,23 +3,13 @@ using KiaraFin.Api.Features.Finance;
 
 namespace KiaraFin.Api.Features.Accounts;
 
-public sealed record CreateAccountRequest(
+public sealed record SaveAccountRequest(
     [Required, StringLength(120, MinimumLength = 2)] string Name,
     FinancialAccountType Type,
     [StringLength(120)] string? Institution,
     [StringLength(30)] string? Color,
     [StringLength(60)] string? Icon,
-    decimal InitialBalance,
-    DateOnly InitialBalanceDate,
-    Guid ResponsibleUserId);
-
-public sealed record UpdateAccountRequest(
-    [Required, StringLength(120, MinimumLength = 2)] string Name,
-    FinancialAccountType Type,
-    [StringLength(120)] string? Institution,
-    [StringLength(30)] string? Color,
-    [StringLength(60)] string? Icon,
-    Guid ResponsibleUserId);
+    decimal Balance);
 
 public sealed record AccountResponse(
     Guid Id,
@@ -28,22 +18,16 @@ public sealed record AccountResponse(
     string? Institution,
     string? Color,
     string? Icon,
-    decimal InitialBalance,
-    DateOnly InitialBalanceDate,
     decimal CurrentBalance,
-    decimal Income,
-    decimal Expenses,
-    Guid ResponsibleUserId,
     bool IsActive,
     string? SourceProvider,
-    string? ExternalId,
-    bool InstitutionControlled);
+    bool InstitutionControlled,
+    DateTime? UpdatedAtUtc);
 
-public sealed record AccountMovementResponse(
+public sealed record AccountTransactionResponse(
     Guid Id,
-    Guid TransactionId,
     string Description,
     decimal Amount,
-    AccountMovementKind Kind,
     DateOnly Date,
-    DateTime CreatedAtUtc);
+    bool IsPending,
+    string? Category);

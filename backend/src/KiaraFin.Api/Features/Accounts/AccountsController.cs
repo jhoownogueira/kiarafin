@@ -21,7 +21,7 @@ public sealed class AccountsController(AccountService service) : ControllerBase
 
     [HttpPost]
     public async Task<ActionResult<AccountResponse>> Create(
-        Guid householdId, CreateAccountRequest request, CancellationToken cancellationToken)
+        Guid householdId, SaveAccountRequest request, CancellationToken cancellationToken)
     {
         var account = await service.CreateAsync(householdId, request, cancellationToken);
         return CreatedAtAction(nameof(Get), new { householdId, accountId = account.Id }, account);
@@ -29,7 +29,7 @@ public sealed class AccountsController(AccountService service) : ControllerBase
 
     [HttpPut("{accountId:guid}")]
     public async Task<ActionResult<AccountResponse>> Update(
-        Guid householdId, Guid accountId, UpdateAccountRequest request, CancellationToken cancellationToken) =>
+        Guid householdId, Guid accountId, SaveAccountRequest request, CancellationToken cancellationToken) =>
         Ok(await service.UpdateAsync(householdId, accountId, request, cancellationToken));
 
     [HttpDelete("{accountId:guid}")]
@@ -49,7 +49,7 @@ public sealed class AccountsController(AccountService service) : ControllerBase
     }
 
     [HttpGet("{accountId:guid}/history")]
-    public async Task<ActionResult<PagedResponse<AccountMovementResponse>>> History(
+    public async Task<ActionResult<PagedResponse<AccountTransactionResponse>>> History(
         Guid householdId, Guid accountId, int page = 1,
         int pageSize = Pagination.DefaultPageSize, CancellationToken cancellationToken = default) =>
         Ok(await service.HistoryAsync(householdId, accountId, page, pageSize, cancellationToken));

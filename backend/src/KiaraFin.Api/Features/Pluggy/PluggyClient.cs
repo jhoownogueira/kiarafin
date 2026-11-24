@@ -1,9 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using KiaraFin.Api.Common.Exceptions;
 using Microsoft.Extensions.Options;
 
@@ -23,17 +24,28 @@ public sealed class PluggyOptions
 }
 
 public sealed record PluggyItem(string Id, string Status, DateTime? ConsentExpiresAtUtc, string? ConnectorName, string? ErrorCode);
-public sealed record PluggyAccount(string Id, string Type, string Name, string? InstitutionName,
-    decimal Balance, string? Subtype, string ContentHash, decimal? CreditLimit = null,
-    decimal? AvailableCreditLimit = null, DateOnly? BalanceCloseDate = null,
-    DateOnly? BalanceDueDate = null, string? Brand = null, string? Status = null);
-public sealed record PluggyTransaction(string Id, string AccountId, string Description, decimal Amount,
-    DateOnly Date, string? Type, string? OperationType, string? Status, DateTime? UpdatedAtUtc,
-    DateTime? TransactionDateTimeUtc, string? ProviderId, string? ProviderCode,
-    string? Category, int? InstallmentNumber, int? InstallmentCount, string ContentHash,
-    string? BillId = null);
-public sealed record PluggyBill(string Id, string AccountId, DateOnly DueDate,
-    DateOnly? ClosingDate, decimal TotalAmount, DateOnly? PaidDate, string ContentHash);
+
+public sealed record PluggyAccount(string Id, string Type, string Name, string? InstitutionName, decimal Balance,
+    string? Subtype = null, string? Number = null, decimal? CreditLimit = null, decimal? AvailableCreditLimit = null,
+    decimal? MinimumPayment = null, DateOnly? BalanceCloseDate = null, DateOnly? BalanceDueDate = null,
+    string? Brand = null, string? Status = null)
+{
+    public bool IsCreditCard => Type.Equals("CREDIT", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <param name="Amount">Valor na moeda da conta (amountInAccountCurrency quando informado), com o sinal da Pluggy.</param>
+/// <param name="Date">Data local (America/Sao_Paulo).</param>
+public sealed record PluggyTransaction(string Id, string AccountId, string Description, decimal Amount, DateOnly Date,
+    string? Type = null, string? OperationType = null, string? Status = null, string? Category = null,
+    int? InstallmentNumber = null, int? TotalInstallments = null, string? BillId = null, DateOnly? PurchaseDate = null,
+    string? CurrencyCode = null, decimal? OriginalAmount = null)
+{
+    public bool IsPending => string.Equals(Status, "PENDING", StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed record PluggyBill(string Id, string AccountId, DateOnly DueDate, DateOnly? ClosingDate,
+    decimal TotalAmount, decimal? MinimumPayment = null, decimal PaidAmount = 0, DateOnly? LastPaymentDate = null);
+
 public sealed record PluggySnapshot(PluggyItem Item, IReadOnlyList<PluggyAccount> Accounts,
     IReadOnlyList<PluggyTransaction> Transactions, IReadOnlyList<PluggyBill>? Bills = null)
 {
@@ -42,7 +54,7 @@ public sealed record PluggySnapshot(PluggyItem Item, IReadOnlyList<PluggyAccount
 
 public interface IPluggyClient { Task<PluggySnapshot> ReadCompleteSnapshotAsync(string expectedItemId, CancellationToken cancellationToken); }
 
-public sealed class PluggyClient(HttpClient httpClient, IOptions<PluggyOptions> options) : IPluggyClient
+public sealed partial class PluggyClient(HttpClient httpClient, IOptions<PluggyOptions> options) : IPluggyClient
 {
     private readonly PluggyOptions _options = options.Value;
     private readonly SemaphoreSlim _authLock = new(1, 1);
@@ -181,54 +193,111 @@ public sealed class PluggyClient(HttpClient httpClient, IOptions<PluggyOptions> 
     }
 
     private static PluggyItem ParseItem(JsonElement e) => new(
-        RequiredString(e,"id"), OptionalString(e,"status") ?? "UNKNOWN",
-        ReadDateTime(e,"consentExpiresAt"),
-        e.TryGetProperty("connector", out var c) ? OptionalString(c,"name") : null,
-        e.TryGetProperty("error", out var error) ? OptionalString(error,"code") : null);
-    private static PluggyAccount ParseAccount(JsonElement e)
+        RequiredString(e, "id"), OptionalString(e, "status") ?? "UNKNOWN",
+        ReadDateTime(e, "consentExpiresAt"),
+        e.TryGetProperty("connector", out var c) ? OptionalString(c, "name") : null,
+        e.TryGetProperty("error", out var error) ? OptionalString(error, "code") : null);
+
+    internal static PluggyAccount ParseAccount(JsonElement e)
     {
-        var id=RequiredString(e,"id"); var type=RequiredString(e,"type"); var name=RequiredString(e,"name");
-        var institution=e.TryGetProperty("institution",out var i) ? OptionalString(i,"name") : null;
-        decimal? creditLimit=null, available=null; DateOnly? close=null, due=null; string? brand=null, status=null;
-        if(e.TryGetProperty("creditData",out var credit) && credit.ValueKind==JsonValueKind.Object)
+        var institution = e.TryGetProperty("institution", out var i) ? OptionalString(i, "name") : null;
+        decimal? creditLimit = null, available = null, minimum = null;
+        DateOnly? close = null, due = null;
+        string? brand = null, status = null;
+        if (e.TryGetProperty("creditData", out var credit) && credit.ValueKind == JsonValueKind.Object)
         {
-            creditLimit=ReadDecimal(credit,"creditLimit"); available=ReadDecimal(credit,"availableCreditLimit");
-            close=ReadDateOnly(credit,"balanceCloseDate"); due=ReadDateOnly(credit,"balanceDueDate");
-            brand=OptionalString(credit,"brand"); status=OptionalString(credit,"status");
+            creditLimit = ReadDecimal(credit, "creditLimit");
+            available = ReadDecimal(credit, "availableCreditLimit");
+            minimum = ReadDecimal(credit, "minimumPayment");
+            close = ReadLocalDate(credit, "balanceCloseDate");
+            due = ReadLocalDate(credit, "balanceDueDate");
+            brand = OptionalString(credit, "brand");
+            status = OptionalString(credit, "status");
         }
-        return new(id,type,name,institution,ReadDecimal(e,"balance") ?? throw new PluggyIncompleteResponseException("Conta sem saldo."),OptionalString(e,"subtype"),Hash(e),creditLimit,available,close,due,brand,status);
+        return new(RequiredString(e, "id"), RequiredString(e, "type"), RequiredString(e, "name"), institution,
+            ReadDecimal(e, "balance") ?? throw new PluggyIncompleteResponseException("Conta sem saldo."),
+            OptionalString(e, "subtype"), OptionalString(e, "number"), creditLimit, available, minimum,
+            close, due, brand, status);
     }
-    private static PluggyTransaction ParseTransaction(JsonElement e,string accountId)
+
+    internal static PluggyTransaction ParseTransaction(JsonElement e, string accountId)
     {
-        var dateText=RequiredString(e,"date"); if (!DateOnly.TryParse(dateText[..Math.Min(10,dateText.Length)],out var date)) throw new PluggyIncompleteResponseException("Transação sem data válida.");
-        string? category=null; if(e.TryGetProperty("category",out var cat)) category=cat.ValueKind==JsonValueKind.String?cat.GetString():OptionalString(cat,"description") ?? OptionalString(cat,"name");
-        int? number=null,count=null; if(e.TryGetProperty("creditCardMetadata",out var metadata)){number=ReadInt(metadata,"installmentNumber");count=ReadInt(metadata,"totalInstallments");}
-        string? billId=null;
-        if(e.TryGetProperty("creditCardMetadata",out metadata) && metadata.ValueKind==JsonValueKind.Object) billId=OptionalString(metadata,"billId");
-        return new(RequiredString(e,"id"),accountId,OptionalString(e,"description") ?? OptionalString(e,"descriptionRaw") ?? throw new PluggyIncompleteResponseException("Transação sem descrição."),
-            ReadDecimal(e,"amount") ?? throw new PluggyIncompleteResponseException("Transação sem valor."),date,OptionalString(e,"type"),
-            OptionalString(e,"operationType"),OptionalString(e,"status"),ReadDateTime(e,"updatedAt"),
-            ReadDateTime(e,"transactionDateTime"),OptionalString(e,"providerId"),OptionalString(e,"providerCode"),category,number,count,Hash(e),billId);
+        var date = ReadLocalDate(e, "date") ?? throw new PluggyIncompleteResponseException("Transação sem data válida.");
+        string? category = null;
+        if (e.TryGetProperty("category", out var cat))
+            category = cat.ValueKind == JsonValueKind.String ? cat.GetString() : OptionalString(cat, "description") ?? OptionalString(cat, "name");
+        int? number = null, count = null;
+        string? billId = null;
+        DateOnly? purchaseDate = null;
+        if (e.TryGetProperty("creditCardMetadata", out var metadata) && metadata.ValueKind == JsonValueKind.Object)
+        {
+            number = ReadInt(metadata, "installmentNumber");
+            count = ReadInt(metadata, "totalInstallments");
+            billId = OptionalString(metadata, "billId");
+            purchaseDate = ReadLocalDate(metadata, "purchaseDate");
+        }
+        var amount = ReadDecimal(e, "amount") ?? throw new PluggyIncompleteResponseException("Transação sem valor.");
+        var currency = OptionalString(e, "currencyCode");
+        // Compras internacionais: "amount" vem na moeda original; o valor que entra na fatura é
+        // amountInAccountCurrency (em reais).
+        var accountAmount = ReadDecimal(e, "amountInAccountCurrency");
+        var foreign = currency is not null && !currency.Equals("BRL", StringComparison.OrdinalIgnoreCase);
+        return new(RequiredString(e, "id"), accountId,
+            OptionalString(e, "description") ?? OptionalString(e, "descriptionRaw") ?? "Sem descrição",
+            accountAmount ?? amount, date, OptionalString(e, "type"), OptionalString(e, "operationType"),
+            OptionalString(e, "status"), category, number, count, billId, purchaseDate,
+            foreign ? currency : null, foreign ? amount : null);
     }
-    private static PluggyBill ParseBill(JsonElement e,string accountId)
+
+    internal static PluggyBill ParseBill(JsonElement e, string accountId)
     {
-        var payments = e.TryGetProperty("payments",out var values) && values.ValueKind==JsonValueKind.Array
-            ? values.EnumerateArray().Select(x => ReadDateOnly(x,"paymentDate")).Where(x => x is not null).Select(x => x!.Value).ToList()
-            : [];
-        return new(RequiredString(e,"id"),accountId,
-            ReadDateOnly(e,"dueDate") ?? throw new PluggyIncompleteResponseException("Fatura sem vencimento."),
-            ReadDateOnly(e,"billClosingDate"),
-            ReadDecimal(e,"totalAmount") ?? throw new PluggyIncompleteResponseException("Fatura sem valor total."),
-            payments.Count == 0 ? null : payments.Max(), Hash(e));
+        decimal paid = 0;
+        DateOnly? lastPayment = null;
+        if (e.TryGetProperty("payments", out var values) && values.ValueKind == JsonValueKind.Array)
+            foreach (var payment in values.EnumerateArray())
+            {
+                paid += Math.Abs(ReadDecimal(payment, "amount") ?? 0);
+                var date = ReadLocalDate(payment, "paymentDate");
+                if (date is not null && (lastPayment is null || date > lastPayment)) lastPayment = date;
+            }
+        return new(RequiredString(e, "id"), accountId,
+            ReadLocalDate(e, "dueDate") ?? throw new PluggyIncompleteResponseException("Fatura sem vencimento."),
+            ReadLocalDate(e, "billClosingDate") ?? ReadLocalDate(e, "closingDate"),
+            ReadDecimal(e, "totalAmount") ?? throw new PluggyIncompleteResponseException("Fatura sem valor total."),
+            ReadDecimal(e, "minimumPaymentAmount"), paid, lastPayment);
     }
+
+    private static readonly TimeZoneInfo SaoPaulo = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+
+    /// <summary>
+    /// A Pluggy envia datas em ISO8601 UTC. Meia-noite UTC exata (ou data sem fuso) é uma data
+    /// "pura" e é usada como está; qualquer outro horário é convertido para o horário de Brasília,
+    /// senão uma compra às 22h do dia 19 viraria dia 20 e poderia cair na fatura errada.
+    /// </summary>
+    internal static DateOnly? ParseLocalDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var hasOffset = OffsetSuffix().IsMatch(value);
+        if (!hasOffset)
+            return DateOnly.TryParseExact(value[..Math.Min(10, value.Length)], "yyyy-MM-dd",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var plain) ? plain : null;
+        if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var instant))
+            return null;
+        var utc = instant.UtcDateTime;
+        if (utc.TimeOfDay == TimeSpan.Zero) return DateOnly.FromDateTime(utc);
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, SaoPaulo));
+    }
+
+    [GeneratedRegex(@"T.*(Z|[+-]\d{2}:?\d{2})$", RegexOptions.IgnoreCase)]
+    private static partial Regex OffsetSuffix();
+
+    private static DateOnly? ReadLocalDate(JsonElement e, string name) => ParseLocalDate(OptionalString(e, name));
     private static bool IsHealthyStatus(string status) => status.Equals("UPDATED",StringComparison.OrdinalIgnoreCase);
     private static string RequiredString(JsonElement e,string name)=>OptionalString(e,name) ?? throw new PluggyIncompleteResponseException($"Campo obrigatório ausente: {name}.");
     private static string? OptionalString(JsonElement e,string name)=>e.ValueKind==JsonValueKind.Object&&e.TryGetProperty(name,out var p)&&p.ValueKind==JsonValueKind.String?p.GetString():null;
     private static int? ReadInt(JsonElement e,string name)=>e.ValueKind==JsonValueKind.Object&&e.TryGetProperty(name,out var p)&&p.TryGetInt32(out var n)?n:null;
     private static decimal? ReadDecimal(JsonElement e,string name)=>e.ValueKind==JsonValueKind.Object&&e.TryGetProperty(name,out var p)&&p.TryGetDecimal(out var n)?n:null;
     private static DateTime? ReadDateTime(JsonElement e,string name)=>OptionalString(e,name) is string value&&DateTime.TryParse(value,null,System.Globalization.DateTimeStyles.AdjustToUniversal|System.Globalization.DateTimeStyles.AssumeUniversal,out var d)?d.ToUniversalTime():null;
-    private static DateOnly? ReadDateOnly(JsonElement e,string name)=>OptionalString(e,name) is string value&&DateOnly.TryParse(value[..Math.Min(10,value.Length)],out var d)?d:null;
-    private static string Hash(JsonElement e)=>Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(e.GetRawText())));
 }
 
 public sealed class PluggyUnavailableException(string message) : Exception(message);

@@ -55,7 +55,6 @@ public sealed class Household
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
     public ICollection<HouseholdMembership> Memberships { get; private set; } = [];
-    public ICollection<HouseholdInvitation> Invitations { get; private set; } = [];
 }
 
 public sealed class HouseholdMembership
@@ -78,50 +77,6 @@ public sealed class HouseholdMembership
     public DateTime JoinedAtUtc { get; private set; }
     public Household Household { get; private set; } = null!;
     public User User { get; private set; } = null!;
-}
-
-public sealed class HouseholdInvitation
-{
-    private HouseholdInvitation() { }
-
-    public HouseholdInvitation(
-        Guid householdId,
-        Guid invitedByUserId,
-        string tokenHash,
-        DateTime expiresAtUtc,
-        string? invitedEmail)
-    {
-        Id = Guid.NewGuid();
-        HouseholdId = householdId;
-        InvitedByUserId = invitedByUserId;
-        TokenHash = tokenHash;
-        ExpiresAtUtc = expiresAtUtc;
-        InvitedEmail = string.IsNullOrWhiteSpace(invitedEmail)
-            ? null
-            : invitedEmail.Trim().ToLowerInvariant();
-        CreatedAtUtc = DateTime.UtcNow;
-    }
-
-    public Guid Id { get; private set; }
-    public Guid HouseholdId { get; private set; }
-    public Guid InvitedByUserId { get; private set; }
-    public string TokenHash { get; private set; } = null!;
-    public string? InvitedEmail { get; private set; }
-    public DateTime ExpiresAtUtc { get; private set; }
-    public DateTime CreatedAtUtc { get; private set; }
-    public DateTime? AcceptedAtUtc { get; private set; }
-    public Guid? AcceptedByUserId { get; private set; }
-    public DateTime? RevokedAtUtc { get; private set; }
-    public Household Household { get; private set; } = null!;
-
-    public bool IsActive(DateTime utcNow) =>
-        AcceptedAtUtc is null && RevokedAtUtc is null && ExpiresAtUtc > utcNow;
-
-    public void Accept(Guid userId, DateTime utcNow)
-    {
-        AcceptedByUserId = userId;
-        AcceptedAtUtc = utcNow;
-    }
 }
 
 public sealed class RefreshToken

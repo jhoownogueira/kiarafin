@@ -1,89 +1,72 @@
-export type InvoiceStatus = "Upcoming" | "Open" | "Closed" | "Paid" | "Canceled"
+import { api } from "@/lib/api/client"
 
-export type InvoiceSummary = {
-  id: string
-  closingDate: string | null
-  dueDate: string
-  totalAmount: number
-  status: InvoiceStatus
-  paidDate: string | null
-}
+export type CardTransactionKind = "Purchase" | "Credit" | "Payment"
 
-export type InvoicePurchase = {
+export type CardItem = {
   id: string
-  installmentPlanId: string | null
-  cardSubscriptionId: string | null
   description: string
   amount: number
-  totalPurchaseAmount: number
-  competenceDate: string
-  categoryId: string
-  responsibleUserId: string
-  scope: "Individual" | "Shared"
+  effect: number
+  kind: CardTransactionKind
+  date: string
+  purchaseDate: string | null
+  isPending: boolean
   installmentNumber: number | null
-  installmentCount: number | null
-  isRefund: boolean
-  isProjected: boolean
+  totalInstallments: number | null
+  category: string | null
+  currencyCode: string | null
+  originalAmount: number | null
 }
 
-export type InvoiceDetail = {
+export type OpenInvoice = { total: number; closingDate: string | null; dueDate: string | null; itemCount: number; items: CardItem[] | null }
+
+export type ClosedInvoice = {
   id: string
-  creditCardId: string
-  cycleStartDate: string | null
-  closingDate: string | null
   dueDate: string
+  closingDate: string | null
   totalAmount: number
-  status: InvoiceStatus
-  paidDate: string | null
-  paymentTransactionId: string | null
-  purchases: InvoicePurchase[]
+  minimumPayment: number | null
+  paidAmount: number
+  outstanding: number
+  isPaid: boolean
+  itemsTotal: number
+  items: CardItem[] | null
 }
 
-export type FormingInvoice = {
-  expectedDueDate: string
-  estimatedTotal: number
-  purchases: InvoicePurchase[]
-}
-
-export type CreditCard = {
+export type CardSummary = {
   id: string
   name: string
   institution: string | null
   brand: string | null
-  color: string | null
-  totalLimit: number | null
-  usedLimit: number | null
+  number: string | null
+  creditLimit: number | null
   availableLimit: number | null
-  closingDay: number | null
-  dueDay: number | null
-  responsibleUserId: string
-  defaultPaymentAccountId: string | null
-  status: "Active" | "Inactive"
-  invoices: InvoiceSummary[]
-  formingInvoices: FormingInvoice[]
-  sourceProvider: string | null
-  externalId: string | null
-  institutionControlled: boolean
+  reportedBalance: number
+  isActive: boolean
+  updatedAtUtc: string | null
+  currentInvoice: OpenInvoice
+  outstandingClosedInvoices: number
+  lastClosedInvoice: ClosedInvoice | null
 }
 
-export const invoiceStatusLabel: Record<InvoiceStatus, string> = {
-  Upcoming: "Em formação",
-  Open: "Aberta",
-  Closed: "Fechada",
-  Paid: "Paga",
-  Canceled: "Cancelada",
+export type CardDetail = {
+  card: CardSummary
+  currentInvoice: OpenInvoice
+  upcoming: CardItem[]
+  closedInvoices: ClosedInvoice[]
+  payments: CardItem[]
 }
 
-export type CreditCardSubscription = {
-  id: string
-  creditCardId: string
-  name: string
-  amount: number
-  chargeDay: number
-  startDate: string
-  endDate: string | null
-  categoryId: string
-  responsibleUserId: string
-  scope: "Individual" | "Shared"
-  status: "Active" | "Paused" | "Ended"
+const root = (householdId: string) => `/households/${householdId}/cards`
+
+export const cardKeys = {
+  list: (householdId: string) => ["cards", householdId] as const,
+  detail: (householdId: string, cardId: string) => ["cards", householdId, cardId] as const,
 }
+
+export const cardService = {
+  async list(householdId: string) { return (await api.get<CardSummary[]>(root(householdId))).data },
+  async get(householdId: string, cardId: string) { return (await api.get<CardDetail>(`${root(householdId)}/${cardId}`)).data },
+}
+
+export const kindLabel: Record<CardTransactionKind, string> = { Purchase: "Compra", Credit: "Estorno/crédito", Payment: "Pagamento" }

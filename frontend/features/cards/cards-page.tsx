@@ -1,49 +1,50 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { ArrowRight, CloudCheck, CreditCard as CardIcon, Plus } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
+import { ArrowRight, CreditCard as CardIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { CardFormDialog } from "@/features/cards/card-dialogs"
-import { invoiceStatusLabel, type CreditCard } from "@/features/cards/card-types"
+import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { cardKeys, cardService } from "@/features/cards/card-types"
 import { useFinanceContext } from "@/features/finance/selectors"
-import { api } from "@/lib/api/client"
-import { formatCurrency, formatDate } from "@/lib/formatters"
 import { getApiErrorMessage } from "@/lib/api/errors"
+import { formatCurrency, formatDate } from "@/lib/formatters"
 
 export function CardsPage() {
-  const { householdId, accounts, members } = useFinanceContext()
-  const [open, setOpen] = useState(false)
-  const query = useQuery({ queryKey: ["credit-cards", householdId], queryFn: async () => (await api.get<CreditCard[]>(`/households/${householdId}/credit-cards`)).data, enabled: !!householdId })
+  const { householdId } = useFinanceContext()
+  const query = useQuery({ queryKey: cardKeys.list(householdId), queryFn: () => cardService.list(householdId), enabled: !!householdId })
 
   return <div>
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div><p className="text-sm font-semibold text-brand-green">Crédito</p><h1 className="mt-1 font-heading text-3xl font-semibold">Cartões e faturas</h1><p className="mt-2 text-muted-foreground">Escolha um cartão para consultar e administrar suas faturas mês a mês.</p></div>
-      <Button onClick={() => setOpen(true)}><Plus />Novo cartão</Button>
-    </div>
+    <div><p className="text-sm font-semibold text-brand-green">Crédito</p><h1 className="mt-1 font-heading text-3xl font-semibold">Cartões</h1><p className="mt-2 text-muted-foreground">Faturas montadas a partir dos dados do Open Finance.</p></div>
 
-    {query.isPending ? <p className="mt-8 text-sm text-muted-foreground">Carregando…</p> : query.isError ? <Card className="mt-6"><CardContent className="flex min-h-40 flex-col items-center justify-center p-6 text-center"><p className="text-sm text-destructive">{getApiErrorMessage(query.error, "Não foi possível carregar os cartões.")}</p><Button variant="outline" className="mt-4" onClick={() => query.refetch()}>Tentar novamente</Button></CardContent></Card> : query.data?.length ? <div className="mt-6 grid gap-5 lg:grid-cols-2">
-      {query.data.map((card) => {
-        const openInvoice = card.invoices
-          .filter((invoice) => invoice.status !== "Paid" && invoice.status !== "Canceled")
-          .sort((left, right) => left.dueDate.localeCompare(right.dueDate))[0]
-        const formingInvoice = card.formingInvoices?.[0]
-        const nextInvoice = openInvoice ?? (formingInvoice ? undefined : card.invoices[0])
-        return <Card key={card.id}><CardContent className="p-5">
-          <div className="rounded-2xl p-5 text-white" style={{ background: card.color || "#01212B" }}>
-            <div className="flex justify-between"><div><p className="text-xs opacity-75">{card.institution}</p><div className="flex items-center gap-2"><p className="text-lg font-semibold">{card.name}</p>{(card.institutionControlled || card.sourceProvider === "PLUGGY") && <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-semibold uppercase"><CloudCheck className="size-3" />Open Finance</span>}</div></div><CardIcon /></div>
-            <div className="mt-8 grid grid-cols-3 gap-2 text-xs"><div><p className="opacity-70">Limite</p><p className="font-semibold">{card.totalLimit == null ? "Não informado" : formatCurrency(card.totalLimit)}</p></div><div><p className="opacity-70">Usado</p><p className="font-semibold">{card.usedLimit == null ? "Não informado" : formatCurrency(card.usedLimit)}</p></div><div><p className="opacity-70">Disponível</p><p className="font-semibold">{card.availableLimit == null ? "Não informado" : formatCurrency(card.availableLimit)}</p></div></div>
+    {query.isPending ? <div className="mt-6 grid gap-5 lg:grid-cols-2">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-64" />)}</div>
+      : query.isError ? <Card className="mt-6"><CardContent className="flex min-h-40 flex-col items-center justify-center p-6 text-center"><p className="text-sm text-destructive">{getApiErrorMessage(query.error, "Não foi possível carregar os cartões.")}</p><Button variant="outline" className="mt-4" onClick={() => query.refetch()}>Tentar novamente</Button></CardContent></Card>
+      : query.data.length === 0 ? <Card className="mt-6 border-dashed"><CardContent className="flex min-h-64 flex-col items-center justify-center text-center"><CardIcon className="size-10 text-muted-foreground" /><h2 className="mt-4 font-semibold">Nenhum cartão sincronizado</h2><p className="mt-1 text-sm text-muted-foreground">Os cartões aparecem aqui após a sincronização do Open Finance.</p><Button variant="outline" className="mt-4" asChild><Link href="/configuracoes/open-finance">Abrir Open Finance</Link></Button></CardContent></Card>
+      : <div className="mt-6 grid gap-5 lg:grid-cols-2">{query.data.map((card) => {
+        const used = card.creditLimit && card.availableLimit !== null ? card.creditLimit - card.availableLimit : null
+        const usedPercent = used !== null && card.creditLimit ? Math.min(100, Math.max(0, (used / card.creditLimit) * 100)) : null
+        return <Card key={card.id} className={!card.isActive ? "opacity-65" : ""}><CardContent className="p-5">
+          <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 p-5 text-white">
+            <div className="flex items-start justify-between gap-3"><div><p className="text-xs opacity-70">{card.institution}</p><p className="text-lg font-semibold">{card.name}</p></div><p className="text-xs font-semibold uppercase opacity-80">{card.brand}</p></div>
+            <p className="mt-6 text-xs opacity-70">Fatura atual (aberta)</p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight">{formatCurrency(card.currentInvoice.total)}</p>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs opacity-80">
+              {card.currentInvoice.closingDate && <span>Fecha em {formatDate(card.currentInvoice.closingDate)}</span>}
+              {card.currentInvoice.dueDate && <span>Vence em {formatDate(card.currentInvoice.dueDate)}</span>}
+              <span>{card.currentInvoice.itemCount} lançamento(s)</span>
+            </div>
+            {card.number && <p className="mt-4 font-mono text-sm tracking-widest opacity-80">•••• {card.number.slice(-4)}</p>}
           </div>
-          <div className="mt-5 flex items-center justify-between gap-4 border-t pt-4">
-            <div>{nextInvoice ? <><p className="text-sm font-semibold">Próxima fatura: {formatCurrency(nextInvoice.totalAmount)}</p><p className="mt-1 text-xs text-muted-foreground">Vence {formatDate(nextInvoice.dueDate)} · {invoiceStatusLabel[nextInvoice.status]}</p></> : formingInvoice ? <><p className="text-sm font-semibold">Em formação: {formatCurrency(formingInvoice.estimatedTotal)}</p><p className="mt-1 text-xs text-muted-foreground">Vencimento estimado em {formatDate(formingInvoice.expectedDueDate)}</p></> : <><p className="text-sm font-semibold">Nenhuma fatura disponível</p><p className="mt-1 text-xs text-muted-foreground">{card.institutionControlled ? "A instituição não disponibilizou faturas estruturadas." : "Registre uma compra para iniciar."}</p></>}</div>
-            <Button asChild><Link href={`/cartoes/${card.id}`}>Acessar cartão<ArrowRight /></Link></Button>
+          {card.outstandingClosedInvoices > 0 && <p className="mt-4 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">Fatura fechada em aberto: <span className="font-semibold">{formatCurrency(card.outstandingClosedInvoices)}</span>{card.lastClosedInvoice && <> · vence {formatDate(card.lastClosedInvoice.dueDate)}</>}</p>}
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div><p className="text-xs text-muted-foreground">Limite total</p><p className="font-semibold">{card.creditLimit !== null ? formatCurrency(card.creditLimit) : "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Limite disponível</p><p className="font-semibold">{card.availableLimit !== null ? formatCurrency(card.availableLimit) : "—"}</p></div>
           </div>
+          {usedPercent !== null && <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-brand-green" style={{ width: `${usedPercent}%` }} /></div>}
+          {card.lastClosedInvoice && <p className="mt-4 text-xs text-muted-foreground">Última fatura fechada: {formatCurrency(card.lastClosedInvoice.totalAmount)} · venc. {formatDate(card.lastClosedInvoice.dueDate)} · {card.lastClosedInvoice.isPaid ? "paga" : "em aberto"}</p>}
+          <Button variant="outline" className="mt-4 w-full" asChild><Link href={`/cartoes/${card.id}`}>Ver faturas<ArrowRight /></Link></Button>
         </CardContent></Card>
-      })}
-    </div> : <Card className="mt-6 border-dashed"><CardContent className="flex min-h-56 items-center justify-center text-sm text-muted-foreground">Nenhum cartão cadastrado.</CardContent></Card>}
-
-    <CardFormDialog open={open} onOpenChange={setOpen} householdId={householdId} accounts={accounts} members={members} />
+      })}</div>}
   </div>
 }

@@ -6,16 +6,11 @@ using KiaraFin.Api.Common.Security;
 using KiaraFin.Api.Data;
 using KiaraFin.Api.Features.Auth;
 using KiaraFin.Api.Features.Accounts;
+using KiaraFin.Api.Features.Cards;
 using KiaraFin.Api.Features.Categories;
-using KiaraFin.Api.Features.CreditCards;
-using KiaraFin.Api.Features.CreditCardSubscriptions;
-using KiaraFin.Api.Features.Dashboard;
 using KiaraFin.Api.Features.Forecasts;
 using KiaraFin.Api.Features.Households;
-using KiaraFin.Api.Features.Installments;
 using KiaraFin.Api.Features.Notifications;
-using KiaraFin.Api.Features.Reports;
-using KiaraFin.Api.Features.Transactions;
 using KiaraFin.Api.Features.Pluggy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -79,18 +74,13 @@ builder.Services.AddSingleton<IRequestOriginValidator, RequestOriginValidator>()
 builder.Services.AddOptions<RegistrationOptions>()
     .Bind(builder.Configuration.GetSection(RegistrationOptions.SectionName));
 builder.Services.AddScoped<AuthService>();
-builder.Services.AddScoped<HouseholdService>();
 builder.Services.AddScoped<HouseholdAccessService>();
 builder.Services.AddScoped<DefaultCategorySeeder>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<CategoryService>();
-builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<ForecastService>();
-builder.Services.AddScoped<InstallmentService>();
-builder.Services.AddScoped<CreditCardService>();
-builder.Services.AddScoped<CreditCardSubscriptionService>();
-builder.Services.AddScoped<DashboardService>();
-builder.Services.AddScoped<ReportService>();
+builder.Services.AddScoped<BalanceForecastService>();
+builder.Services.AddScoped<CardService>();
 builder.Services.AddOptions<TelegramNotificationOptions>()
     .Bind(builder.Configuration.GetSection(TelegramNotificationOptions.SectionName))
     .Validate(x => !x.Enabled || !string.IsNullOrWhiteSpace(x.BotToken),

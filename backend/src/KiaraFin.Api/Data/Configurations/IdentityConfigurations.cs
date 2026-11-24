@@ -58,35 +58,6 @@ public sealed class HouseholdMembershipConfiguration : IEntityTypeConfiguration<
     }
 }
 
-public sealed class HouseholdInvitationConfiguration : IEntityTypeConfiguration<HouseholdInvitation>
-{
-    public void Configure(EntityTypeBuilder<HouseholdInvitation> builder)
-    {
-        builder.ToTable("household_invitations");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
-        builder.Property(x => x.InvitedEmail).HasMaxLength(320);
-        builder.Property(x => x.ExpiresAtUtc).HasColumnType("timestamp with time zone");
-        builder.Property(x => x.CreatedAtUtc).HasColumnType("timestamp with time zone");
-        builder.Property(x => x.AcceptedAtUtc).HasColumnType("timestamp with time zone");
-        builder.Property(x => x.RevokedAtUtc).HasColumnType("timestamp with time zone");
-        builder.HasIndex(x => x.TokenHash).IsUnique();
-        builder.HasIndex(x => new { x.HouseholdId, x.ExpiresAtUtc });
-        builder.HasOne(x => x.Household)
-            .WithMany(x => x.Invitations)
-            .HasForeignKey(x => x.HouseholdId)
-            .OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<User>()
-            .WithMany()
-            .HasForeignKey(x => x.InvitedByUserId)
-            .OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<User>()
-            .WithMany()
-            .HasForeignKey(x => x.AcceptedByUserId)
-            .OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
 public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 {
     public void Configure(EntityTypeBuilder<RefreshToken> builder)

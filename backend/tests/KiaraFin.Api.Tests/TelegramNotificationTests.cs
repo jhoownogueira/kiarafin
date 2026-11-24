@@ -54,7 +54,7 @@ public sealed class TelegramNotificationTests
         using var body = JsonDocument.Parse(handler.Body);
         var text = body.RootElement.GetProperty("text").GetString();
         Assert.Contains("🚀 <b>KiaraFin online!</b>", text, StringComparison.Ordinal);
-        Assert.Contains("💳 Cartão atual", text, StringComparison.Ordinal);
+        Assert.Contains("💳 Fatura atual", text, StringComparison.Ordinal);
         Assert.Contains("📈 Resultado previsto", text, StringComparison.Ordinal);
         Assert.Equal(1, handler.CallCount);
     }

@@ -5,8 +5,16 @@ namespace KiaraFin.Api.Features.Forecasts;
 
 [ApiController, Authorize]
 [Route("api/households/{householdId:guid}/forecasts")]
-public sealed class ForecastsController(ForecastService service) : ControllerBase
+public sealed class ForecastsController(ForecastService service, BalanceForecastService balance,
+    KiaraFin.Api.Features.Households.HouseholdAccessService access) : ControllerBase
 {
+    [HttpGet("balance")]
+    public async Task<ActionResult<BalanceForecastResponse>> Balance(Guid householdId, CancellationToken cancellationToken)
+    {
+        await access.RequireMembershipAsync(householdId, cancellationToken);
+        return Ok(await balance.CalculateAsync(householdId, cancellationToken));
+    }
+
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ForecastEntryResponse>>> List(
         Guid householdId, CancellationToken cancellationToken) =>
