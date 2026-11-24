@@ -13,7 +13,8 @@ public sealed record CardItemResponse(
     int? TotalInstallments,
     string? Category,
     string? CurrencyCode,
-    decimal? OriginalAmount);
+    decimal? OriginalAmount,
+    bool Projected);
 
 public sealed record OpenInvoiceResponse(
     decimal Total,

@@ -38,7 +38,7 @@ export function CardDetailPage({ cardId }: { cardId: string }) {
 
     <div className="mt-6 grid gap-4 md:grid-cols-4">
       <Metric label="Fatura atual (aberta)" value={formatCurrency(currentInvoice.total)} hint={[currentInvoice.closingDate && `fecha ${formatDate(currentInvoice.closingDate)}`, currentInvoice.dueDate && `vence ${formatDate(currentInvoice.dueDate)}`].filter(Boolean).join(" · ") || undefined} emphasize />
-      <Metric label="Fechada em aberto" value={formatCurrency(card.outstandingClosedInvoices)} hint="Faturas fechadas não pagas" />
+      <Metric label="Fechada a vencer" value={formatCurrency(card.outstandingClosedInvoices)} hint="Fatura fechada ainda não vencida nem paga" />
       <Metric label="Limite disponível" value={card.availableLimit !== null ? formatCurrency(card.availableLimit) : "—"} hint={card.creditLimit !== null ? `de ${formatCurrency(card.creditLimit)}` : undefined} />
       <Metric label="Saldo informado pelo banco" value={formatCurrency(card.reportedBalance)} hint="Campo balance da Pluggy, para conferência" />
     </div>
@@ -48,8 +48,8 @@ export function CardDetailPage({ cardId }: { cardId: string }) {
     </div>
 
     <div className="mt-4">
-      {tab === "current" && <ItemsCard items={currentInvoice.items ?? []} total={currentInvoice.total} empty="Nenhum lançamento na fatura aberta." />}
-      {tab === "upcoming" && <ItemsCard items={upcoming} total={upcoming.reduce((sum, x) => sum + x.effect, 0)} empty="Nenhuma parcela futura informada pelo banco." note="Parcelas e lançamentos com data futura já publicados pelo banco. Não entram na fatura atual." />}
+      {tab === "current" && <ItemsCard items={currentInvoice.items ?? []} total={currentInvoice.total} empty="Nenhum lançamento na fatura aberta." note={(currentInvoice.items ?? []).some((x) => x.projected) ? "Parcelas marcadas como projetadas pertencem a esta fatura, mas o banco só as publica no fechamento." : undefined} />}
+      {tab === "upcoming" && <ItemsCard items={upcoming} total={upcoming.reduce((sum, x) => sum + x.effect, 0)} empty="Nenhuma parcela futura informada pelo banco." note="Parcelas das próximas faturas. As marcadas como projetadas ainda não foram publicadas pelo banco: o Open Finance só envia cada parcela quando ela é faturada." />}
       {tab === "closed" && (closedInvoices.length ? <div className="space-y-3">{closedInvoices.map((invoice) => <ClosedInvoiceCard key={invoice.id} invoice={invoice} />)}</div> : <Empty text="O banco não retornou faturas fechadas." />)}
       {tab === "payments" && <ItemsCard items={payments} empty="Nenhum pagamento encontrado." showAmount />}
     </div>
@@ -91,8 +91,8 @@ function ItemList({ items, empty, showAmount = false }: { items: CardItem[]; emp
     const value = showAmount ? item.amount : item.effect
     return <div key={item.id} className="flex items-center justify-between gap-3 py-2.5">
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{item.description}{item.totalInstallments && item.totalInstallments > 1 ? <span className="ml-2 text-xs font-normal text-muted-foreground">{item.installmentNumber}/{item.totalInstallments}</span> : null}</p>
-        <p className="text-xs text-muted-foreground">{formatDate(item.date)}{item.purchaseDate && item.purchaseDate !== item.date ? ` · compra ${formatDate(item.purchaseDate)}` : ""}{item.isPending ? " · pendente" : ""}{item.kind !== "Purchase" ? ` · ${kindLabel[item.kind]}` : ""}{item.category ? ` · ${item.category}` : ""}</p>
+        <p className={cn("truncate text-sm font-medium", item.projected && "italic")}>{item.description}{item.totalInstallments && item.totalInstallments > 1 ? <span className="ml-2 text-xs font-normal text-muted-foreground">{item.installmentNumber}/{item.totalInstallments}</span> : null}</p>
+        <p className="text-xs text-muted-foreground">{formatDate(item.date)}{item.purchaseDate && item.purchaseDate !== item.date ? ` · compra ${formatDate(item.purchaseDate)}` : ""}{item.projected ? " · projetada" : item.isPending ? " · pendente" : ""}{item.kind !== "Purchase" ? ` · ${kindLabel[item.kind]}` : ""}{item.category ? ` · ${item.category}` : ""}</p>
         {item.currencyCode && item.originalAmount !== null && <p className="flex items-center gap-1 text-xs text-muted-foreground"><Globe2 className="size-3" />{item.originalAmount.toLocaleString("pt-BR", { style: "currency", currency: item.currencyCode })}</p>}
       </div>
       <p className={cn("shrink-0 text-sm font-semibold", value < 0 && "text-emerald-600 dark:text-emerald-400")}>{formatCurrency(value)}</p>

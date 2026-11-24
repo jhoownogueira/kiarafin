@@ -16,6 +16,7 @@ export type CardItem = {
   category: string | null
   currencyCode: string | null
   originalAmount: number | null
+  projected: boolean
 }
 
 export type OpenInvoice = { total: number; closingDate: string | null; dueDate: string | null; itemCount: number; items: CardItem[] | null }
