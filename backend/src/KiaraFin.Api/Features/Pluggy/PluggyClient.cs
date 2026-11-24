@@ -295,8 +295,8 @@ public sealed partial class PluggyClient(HttpClient httpClient, IOptions<PluggyO
     private static bool IsHealthyStatus(string status) => status.Equals("UPDATED",StringComparison.OrdinalIgnoreCase);
     private static string RequiredString(JsonElement e,string name)=>OptionalString(e,name) ?? throw new PluggyIncompleteResponseException($"Campo obrigatório ausente: {name}.");
     private static string? OptionalString(JsonElement e,string name)=>e.ValueKind==JsonValueKind.Object&&e.TryGetProperty(name,out var p)&&p.ValueKind==JsonValueKind.String?p.GetString():null;
-    private static int? ReadInt(JsonElement e,string name)=>e.ValueKind==JsonValueKind.Object&&e.TryGetProperty(name,out var p)&&p.TryGetInt32(out var n)?n:null;
-    private static decimal? ReadDecimal(JsonElement e,string name)=>e.ValueKind==JsonValueKind.Object&&e.TryGetProperty(name,out var p)&&p.TryGetDecimal(out var n)?n:null;
+    private static int? ReadInt(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var n) ? n : null;
+    private static decimal? ReadDecimal(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetDecimal(out var n) ? n : null;
     private static DateTime? ReadDateTime(JsonElement e,string name)=>OptionalString(e,name) is string value&&DateTime.TryParse(value,null,System.Globalization.DateTimeStyles.AdjustToUniversal|System.Globalization.DateTimeStyles.AssumeUniversal,out var d)?d.ToUniversalTime():null;
 }
 

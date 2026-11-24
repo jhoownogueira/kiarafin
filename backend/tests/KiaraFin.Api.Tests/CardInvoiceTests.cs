@@ -173,6 +173,34 @@ public sealed class PluggyParsingTests
     }
 
     [Fact]
+    public void Explicit_null_numbers_are_treated_as_missing()
+    {
+        using var transaction = JsonDocument.Parse("""
+            {"id":"t1","date":"2026-11-10T00:00:00.000Z","description":"Mercado","amount":42.5,
+             "currencyCode":"BRL","amountInAccountCurrency":null,"category":null,
+             "creditCardMetadata":{"installmentNumber":null,"totalInstallments":null,"billId":null}}
+            """);
+        var tx = PluggyClient.ParseTransaction(transaction.RootElement, "card");
+        Assert.Equal(42.5m, tx.Amount);
+        Assert.Null(tx.InstallmentNumber);
+        Assert.Null(tx.CurrencyCode);
+
+        using var account = JsonDocument.Parse("""
+            {"id":"c1","type":"CREDIT","name":"Cartão","balance":10,"number":null,
+             "creditData":{"creditLimit":null,"availableCreditLimit":null,"minimumPayment":null,"balanceCloseDate":null}}
+            """);
+        var parsed = PluggyClient.ParseAccount(account.RootElement);
+        Assert.Null(parsed.CreditLimit);
+        Assert.Null(parsed.MinimumPayment);
+
+        using var bill = JsonDocument.Parse("""
+            {"id":"b1","dueDate":"2026-11-10","totalAmount":800,"minimumPaymentAmount":null,
+             "payments":[{"amount":null,"paymentDate":null}]}
+            """);
+        Assert.Equal(0, PluggyClient.ParseBill(bill.RootElement, "card").PaidAmount);
+    }
+
+    [Fact]
     public void Bill_payments_are_summed()
     {
         using var json = JsonDocument.Parse("""
