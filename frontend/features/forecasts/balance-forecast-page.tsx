@@ -63,7 +63,7 @@ function ForecastView({ data }: { data: BalanceForecast }) {
           <p className="text-xs font-semibold uppercase text-muted-foreground">Cartões</p>
           {data.cards.map((card) => <Link key={card.cardId} href={`/cartoes/${card.cardId}`} className="block rounded-xl border p-3 transition-colors hover:bg-muted/40">
             <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium">{card.name}</p><p className="text-sm font-semibold">{formatCurrency(card.total)}</p></div>
-            <p className="mt-1 text-xs text-muted-foreground">Fatura aberta {formatCurrency(card.currentInvoice)}{card.currentInvoiceDueDate ? ` · vence ${formatDate(card.currentInvoiceDueDate)}` : ""}{card.outstandingClosedInvoices > 0 ? ` · + fechada não paga ${formatCurrency(card.outstandingClosedInvoices)}` : ""}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Fatura aberta {formatCurrency(card.currentInvoice)}{card.currentInvoiceDueDate ? ` · vence ${formatDate(card.currentInvoiceDueDate)}` : ""}{card.outstandingClosedInvoices > 0 ? ` · + fechada a vencer ${formatCurrency(card.outstandingClosedInvoices)}` : ""}</p>
           </Link>)}
         </div>}
       </CardContent></Card>

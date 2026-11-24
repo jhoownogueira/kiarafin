@@ -29,8 +29,8 @@ public sealed record BalanceForecastResponse(
 /// <summary>
 /// Previsão do mês atual:
 ///   resultado = salários + rendas extras − contas fixas − fatura atual dos cartões.
-/// A fatura atual é a fatura aberta calculada a partir do Open Finance, somada ao saldo
-/// ainda não pago de faturas fechadas que vencem neste mês.
+/// A fatura atual é a fatura aberta calculada a partir do Open Finance (com as parcelas
+/// projetadas), somada ao saldo de faturas fechadas que ainda não venceram nem foram pagas.
 /// </summary>
 public sealed class BalanceForecastService(AppDbContext dbContext, CardService cards)
 {
@@ -47,7 +47,7 @@ public sealed class BalanceForecastService(AppDbContext dbContext, CardService c
         var cardItems = (await cards.LoadActiveAsync(householdId, today, cancellationToken)).Select(x =>
         {
             var current = x.Invoices.Current.Total;
-            var outstanding = x.Invoices.OutstandingClosedFrom(monthStart);
+            var outstanding = x.Invoices.OutstandingClosedDueFrom(today);
             return new BalanceForecastCard(x.Card.Id, x.Card.Name, current, x.Invoices.Current.DueDate,
                 outstanding, current + outstanding);
         }).ToList();

@@ -36,7 +36,7 @@ export function CardsPage() {
             </div>
             {card.number && <p className="mt-4 font-mono text-sm tracking-widest opacity-80">•••• {card.number.slice(-4)}</p>}
           </div>
-          {card.outstandingClosedInvoices > 0 && <p className="mt-4 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">Fatura fechada em aberto: <span className="font-semibold">{formatCurrency(card.outstandingClosedInvoices)}</span>{card.lastClosedInvoice && <> · vence {formatDate(card.lastClosedInvoice.dueDate)}</>}</p>}
+          {card.outstandingClosedInvoices > 0 && <p className="mt-4 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">Fatura fechada a vencer: <span className="font-semibold">{formatCurrency(card.outstandingClosedInvoices)}</span>{card.lastClosedInvoice && <> · vence {formatDate(card.lastClosedInvoice.dueDate)}</>}</p>}
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div><p className="text-xs text-muted-foreground">Limite total</p><p className="font-semibold">{card.creditLimit !== null ? formatCurrency(card.creditLimit) : "—"}</p></div>
             <div><p className="text-xs text-muted-foreground">Limite disponível</p><p className="font-semibold">{card.availableLimit !== null ? formatCurrency(card.availableLimit) : "—"}</p></div>

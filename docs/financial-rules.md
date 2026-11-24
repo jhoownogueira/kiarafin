@@ -41,12 +41,21 @@ Montagem das faturas:
 - **Faturas fechadas** são as retornadas por `/bills`; o total é o
   `totalAmount` oficial. Lançamentos com `billId` dessa fatura ficam nela.
 - **Fatura atual (aberta)** são os lançamentos sem `billId` de uma fatura
-  fechada conhecida, exceto pagamentos e parcelas futuras.
-- **Parcelas futuras** são lançamentos com data posterior a hoje ou, para
-  bancos que publicam todas as parcelas de uma vez, as parcelas de número
+  fechada conhecida (exceto pagamentos), mais as parcelas projetadas.
+- **Parcelas projetadas:** o Open Finance só publica cada parcela quando ela é
+  faturada. Quando a última parcela conhecida de uma compra está na última
+  fatura fechada, a parcela seguinte é projetada na fatura atual e as demais
+  nas próximas faturas, com o valor da última parcela. As parcelas de uma
+  mesma compra são agrupadas por descrição, data da compra e quantidade de
+  parcelas. Se a última parcela conhecida está numa fatura mais antiga, a
+  compra é considerada quitada e nada é projetado.
+- **Parcelas futuras** também incluem lançamentos com data posterior a hoje e,
+  para bancos que publicam todas as parcelas de uma vez, as parcelas de número
   maior que a menor parcela ainda em aberto da mesma compra.
-- Uma fatura fechada está paga quando `bill.payments` ou os pagamentos
-  lançados no cartão após o fechamento cobrem o total.
+- Os pagamentos listados em uma fatura (`bill.payments`) são os feitos durante
+  o ciclo dela, ou seja, quitam a fatura anterior. Uma fatura fechada está paga
+  quando esses pagamentos, ou os lançamentos de pagamento após o fechamento,
+  cobrem o total (tolerância de 1%).
 
 ## Previsão de saldo
 
@@ -56,6 +65,6 @@ A Visão geral mostra o mês atual:
 resultado = salários + rendas extras − contas fixas − fatura atual dos cartões
 ```
 
-A fatura atual de cada cartão é a fatura aberta somada ao saldo ainda não pago
-das faturas fechadas que vencem a partir do mês atual. Salários, rendas extras e
+A fatura atual de cada cartão é a fatura aberta (com as parcelas projetadas)
+somada ao saldo de faturas fechadas que ainda não venceram nem foram pagas. Salários, rendas extras e
 contas fixas são as premissas cadastradas em Previsões.

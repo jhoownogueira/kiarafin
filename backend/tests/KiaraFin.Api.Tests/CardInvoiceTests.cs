@@ -70,7 +70,9 @@ public sealed class CardInvoiceCalculatorTests
         ], Today);
 
         Assert.Equal(200, invoices.Current.Total);
-        Assert.Equal(3, invoices.Upcoming.Count);
+        // 04/10 e 05/10 publicadas pelo banco, a viagem com data futura e 06..10 projetadas.
+        Assert.Equal(8, invoices.Upcoming.Count);
+        Assert.Equal(5, invoices.Upcoming.Count(x => x.Projected));
     }
 
     [Fact]
@@ -80,13 +82,78 @@ public sealed class CardInvoiceCalculatorTests
         var bill = Bill(card, "bill", Today.AddDays(5), Today.AddDays(-5), 500);
         var unpaid = CardInvoiceCalculator.Calculate(card, [bill], [], Today);
         Assert.False(unpaid.Closed.Single().IsPaid);
-        Assert.Equal(500, unpaid.OutstandingClosedFrom(new DateOnly(2026, 11, 1)));
+        Assert.Equal(500, unpaid.OutstandingClosedDueFrom(Today));
 
         var paid = CardInvoiceCalculator.Calculate(card, [bill], [
             Tx("Pagamento de fatura", 500, CardTransactionKind.Payment, Today.AddDays(-1)),
         ], Today);
         Assert.True(paid.Closed.Single().IsPaid);
-        Assert.Equal(0, paid.OutstandingClosedFrom(new DateOnly(2026, 11, 1)));
+        Assert.Equal(0, paid.OutstandingClosedDueFrom(Today));
+    }
+
+    [Fact]
+    public void Next_installment_of_the_last_closed_bill_is_projected_into_the_current_invoice()
+    {
+        // Formato real do Open Finance: cada parcela só aparece depois de faturada.
+        var card = Card();
+        var oct = Bill(card, "oct", new DateOnly(2026, 10, 12), new DateOnly(2026, 10, 5), 8910.85m);
+        var nov = Bill(card, "nov", new DateOnly(2026, 11, 12), new DateOnly(2026, 11, 5), 10675.70m, paid: 8908.52m);
+        var aimee = new DateOnly(2026, 9, 17);
+        var amora = new DateOnly(2026, 7, 18);
+        var ideal = new DateOnly(2026, 1, 15);
+        var invoices = CardInvoiceCalculator.Calculate(card, [oct, nov], [
+            Tx("AIMEE", 129.90m, CardTransactionKind.Purchase, new DateOnly(2026, 9, 17), "oct", (1, 3), aimee),
+            Tx("AIMEE", 129.90m, CardTransactionKind.Purchase, new DateOnly(2026, 10, 5), "nov", (2, 3), aimee),
+            Tx("AMORA SHOES", 64.77m, CardTransactionKind.Purchase, new DateOnly(2026, 9, 4), "oct", (3, 6), amora),
+            Tx("AMORA SHOES", 64.77m, CardTransactionKind.Purchase, new DateOnly(2026, 10, 5), "nov", (4, 6), amora),
+            Tx("A IDEAL", 93.84m, CardTransactionKind.Purchase, new DateOnly(2026, 4, 6), null, (4, 4), ideal),
+            Tx("AFTERCLICK", 55.20m, CardTransactionKind.Purchase, new DateOnly(2026, 11, 7), null, (1, 3), new DateOnly(2026, 11, 7)),
+            Tx("LOJA ANTIGA", 50m, CardTransactionKind.Purchase, new DateOnly(2026, 9, 20), "oct", (1, 2), new DateOnly(2026, 9, 20)),
+        ], Today);
+
+        // Fatura atual: AIMEE 3/3 + AMORA 5/6 (projetadas) + AFTERCLICK 1/3 + A IDEAL 4/4 (sem fatura vinculada).
+        Assert.Equal(129.90m + 64.77m + 55.20m + 93.84m, invoices.Current.Total);
+        Assert.Equal(2, invoices.Current.Lines.Count(x => x.Projected));
+        Assert.Equal(new DateOnly(2026, 12, 12), invoices.Current.DueDate);
+        // Próximas: AMORA 6/6 + AFTERCLICK 2/3 e 3/3. LOJA ANTIGA 2/2 deveria estar em nov: não é projetada.
+        Assert.Equal(3, invoices.Upcoming.Count);
+        Assert.DoesNotContain(invoices.Upcoming, x => x.Transaction.Description == "LOJA ANTIGA");
+        Assert.Contains(invoices.Upcoming, x => x.Transaction.Description == "AMORA SHOES" &&
+            x.Transaction.InstallmentNumber == 6 && x.Transaction.Date == new DateOnly(2027, 1, 12));
+    }
+
+    [Fact]
+    public void Projection_is_replaced_without_duplication_when_the_real_installment_arrives()
+    {
+        var card = Card();
+        var nov = Bill(card, "nov", new DateOnly(2026, 11, 12), new DateOnly(2026, 11, 5), 1000);
+        var purchase = new DateOnly(2026, 9, 11);
+        var second = Tx("AMAZONMKTPLC*CGCENTERG", 79.80m, CardTransactionKind.Purchase, new DateOnly(2026, 10, 5), "nov", (2, 5), purchase);
+
+        var before = CardInvoiceCalculator.Calculate(card, [nov], [second], Today);
+        Assert.Equal(79.80m, before.Current.Total);
+        Assert.True(before.Current.Lines.Single().Projected);
+        Assert.Equal(2, before.Upcoming.Count);
+
+        // O Open Finance publica a 3/5 real na fatura aberta.
+        var third = Tx("AMAZONMKTPLC*CGCENTERG", 79.80m, CardTransactionKind.Purchase, new DateOnly(2026, 11, 5), null, (3, 5), purchase);
+        var after = CardInvoiceCalculator.Calculate(card, [nov], [second, third], Today);
+        Assert.Equal(79.80m, after.Current.Total);
+        Assert.False(after.Current.Lines.Single().Projected);
+        Assert.Equal([4, 5], after.Upcoming.Select(x => x.Transaction.InstallmentNumber!.Value));
+    }
+
+    [Fact]
+    public void Payments_listed_in_a_bill_settle_the_previous_bill()
+    {
+        var card = Card();
+        var oct = Bill(card, "oct", new DateOnly(2026, 10, 12), new DateOnly(2026, 10, 5), 8910.85m, paid: 9124.04m);
+        var nov = Bill(card, "nov", new DateOnly(2026, 11, 12), new DateOnly(2026, 11, 5), 10675.70m, paid: 8908.52m);
+        var invoices = CardInvoiceCalculator.Calculate(card, [oct, nov], [], Today);
+
+        Assert.True(invoices.Closed.Single(x => x.Bill.ExternalId == "oct").IsPaid);
+        // A fatura de novembro já venceu: não entra mais como fatura fechada a pagar.
+        Assert.Equal(0, invoices.OutstandingClosedDueFrom(Today));
     }
 
     internal static CreditCard Card()
@@ -96,18 +163,18 @@ public sealed class CardInvoiceCalculatorTests
         return card;
     }
 
-    private static CardBill Bill(CreditCard card, string id, DateOnly due, DateOnly closing, decimal total)
+    private static CardBill Bill(CreditCard card, string id, DateOnly due, DateOnly closing, decimal total, decimal paid = 0)
     {
         var bill = new CardBill(card.Id, id);
-        bill.Apply(due, closing, total, null, 0, null, DateTime.UtcNow);
+        bill.Apply(due, closing, total, null, paid, null, DateTime.UtcNow);
         return bill;
     }
 
     private static CardTransaction Tx(string description, decimal amount, CardTransactionKind kind, DateOnly date,
-        string? billId = null, (int Number, int Total)? installment = null)
+        string? billId = null, (int Number, int Total)? installment = null, DateOnly? purchaseDate = null)
     {
         var tx = new CardTransaction(Guid.NewGuid(), Guid.NewGuid().ToString());
-        tx.Apply(description, amount, kind, date, null, false, billId, installment?.Number, installment?.Total,
+        tx.Apply(description, amount, kind, date, purchaseDate, false, billId, installment?.Number, installment?.Total,
             null, null, null, DateTime.UtcNow);
         return tx;
     }

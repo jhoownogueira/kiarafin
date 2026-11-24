@@ -54,12 +54,11 @@ public sealed class CardService(AppDbContext dbContext, HouseholdAccessService a
     private static CardSummaryResponse Summary(CardWithInvoices item, DateOnly today)
     {
         var card = item.Card;
-        var monthStart = new DateOnly(today.Year, today.Month, 1);
         var last = item.Invoices.Closed.FirstOrDefault();
         return new CardSummaryResponse(card.Id, card.Name, card.Institution, card.Brand, card.Number,
             card.CreditLimit, card.AvailableLimit, card.ReportedBalance, card.IsActive, card.UpdatedAtUtc,
             Open(item.Invoices.Current, includeItems: false),
-            item.Invoices.OutstandingClosedFrom(monthStart),
+            item.Invoices.OutstandingClosedDueFrom(today),
             last is null ? null : Closed(last, includeItems: false));
     }
 
@@ -76,6 +75,7 @@ public sealed class CardService(AppDbContext dbContext, HouseholdAccessService a
     {
         var x = line.Transaction;
         return new CardItemResponse(x.Id, x.Description, x.Amount, line.Effect, x.Kind, x.Date, x.PurchaseDate,
-            x.IsPending, x.InstallmentNumber, x.TotalInstallments, x.Category, x.CurrencyCode, x.OriginalAmount);
+            x.IsPending, x.InstallmentNumber, x.TotalInstallments, x.Category, x.CurrencyCode, x.OriginalAmount,
+            line.Projected);
     }
 }
