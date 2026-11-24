@@ -23,7 +23,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 }
 
 function safeReturnTo(returnTo?: string) {
-  return returnTo?.startsWith("/convite/") && !returnTo.startsWith("//") ? returnTo : "/dashboard"
+  return returnTo?.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/dashboard"
 }
 
 export function AuthForm({ returnTo }: AuthFormProps) {

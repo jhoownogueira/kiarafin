@@ -51,7 +51,13 @@ public sealed record BalanceForecastNotification(
     decimal CardInvoices,
     decimal Result,
     decimal? PreviousResult,
-    DateTime OccurredAtUtc);
+    DateTime OccurredAtUtc)
+{
+    public static BalanceForecastNotification From(string email, BalanceForecastNotificationReason reason,
+        KiaraFin.Api.Features.Forecasts.BalanceForecastResponse forecast, decimal? previousResult) =>
+        new(email, reason, forecast.Salary, forecast.ExtraIncome, forecast.FixedExpenses,
+            forecast.CardInvoices, forecast.Net, previousResult, DateTime.UtcNow);
+}
 
 public sealed class TelegramNotificationService(
     HttpClient httpClient,
@@ -162,7 +168,7 @@ public sealed class TelegramNotificationService(
             $"💰 Salários: <b>{Money(value.Salary)}</b>",
             $"✨ Extras: <b>{Money(value.ExtraIncome)}</b>",
             $"🧾 Contas fixas: <b>− {Money(value.FixedExpenses)}</b>",
-            $"💳 Cartão atual: <b>− {Money(value.CardInvoices)}</b>",
+            $"💳 Fatura atual: <b>− {Money(value.CardInvoices)}</b>",
             "──────────────",
             $"{resultEmoji} Resultado previsto: <b>{SignedMoney(value.Result)}</b>"
         };

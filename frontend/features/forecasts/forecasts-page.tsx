@@ -53,7 +53,7 @@ export function ForecastsPage() {
     mutationFn: (id: string) => forecastService.remove(householdId, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: forecastKeys.list(householdId) })
-      queryClient.invalidateQueries({ queryKey: ["dashboard", householdId] })
+      queryClient.invalidateQueries({ queryKey: ["balance-forecast", householdId] })
       toast.success("Previsão excluída.")
     },
     onError: (error) => toast.error(getApiErrorMessage(error)),
@@ -97,7 +97,7 @@ export function ForecastsPage() {
       : query.data.length === 0 ? <Card className="mt-6 border-dashed"><CardContent className="flex min-h-56 flex-col items-center justify-center text-center">
         <Sparkles className="size-10 text-muted-foreground" />
         <p className="mt-4 font-semibold">Nenhuma previsão cadastrada</p>
-        <p className="mt-1 max-w-md text-sm text-muted-foreground">Adicione salário, rendas extras e contas fixas para visualizar sua projeção no dashboard.</p>
+        <p className="mt-1 max-w-md text-sm text-muted-foreground">Adicione salário, rendas extras e contas fixas para visualizar sua previsão de saldo.</p>
         <Button className="mt-5" onClick={startCreate}><Plus />Adicionar primeira previsão</Button>
       </CardContent></Card>
       : <Card className="mt-6 overflow-hidden">
@@ -113,7 +113,7 @@ export function ForecastsPage() {
               <td className="px-5 py-4 text-right font-semibold">{formatCurrency(item.amount)}</td>
               <td className="px-5 py-4"><div className="flex justify-end gap-1">
                 <Button variant="ghost" size="icon" aria-label={`Editar ${item.name}`} onClick={() => startEdit(item)}><Pencil /></Button>
-                <ConfirmDialog trigger={<Button variant="ghost" size="icon" aria-label={`Excluir ${item.name}`}><Trash2 className="text-destructive" /></Button>} title="Excluir previsão?" description={`“${item.name}” deixará de participar da análise do dashboard. Nenhum lançamento será alterado.`} confirmLabel="Excluir" destructive pending={remove.isPending} onConfirm={() => remove.mutate(item.id)} />
+                <ConfirmDialog trigger={<Button variant="ghost" size="icon" aria-label={`Excluir ${item.name}`}><Trash2 className="text-destructive" /></Button>} title="Excluir previsão?" description={`“${item.name}” deixará de participar da previsão de saldo. Nenhum lançamento será alterado.`} confirmLabel="Excluir" destructive pending={remove.isPending} onConfirm={() => remove.mutate(item.id)} />
               </div></td>
             </tr>)}</tbody>
           </table>
@@ -145,7 +145,7 @@ function ForecastForm({ open, onOpenChange, householdId, entry }: { open: boolea
       : forecastService.create(householdId, values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: forecastKeys.list(householdId) })
-      queryClient.invalidateQueries({ queryKey: ["dashboard", householdId] })
+      queryClient.invalidateQueries({ queryKey: ["balance-forecast", householdId] })
       toast.success(entry ? "Previsão atualizada." : "Previsão criada.")
       onOpenChange(false)
     },

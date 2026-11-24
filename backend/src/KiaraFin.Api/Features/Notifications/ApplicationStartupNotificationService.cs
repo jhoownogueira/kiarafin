@@ -1,5 +1,5 @@
 using KiaraFin.Api.Data;
-using KiaraFin.Api.Features.Dashboard;
+using KiaraFin.Api.Features.Forecasts;
 using KiaraFin.Api.Features.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -20,7 +20,7 @@ public sealed class ApplicationStartupNotificationService(
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var dashboard = scope.ServiceProvider.GetRequiredService<DashboardService>();
+            var forecast = scope.ServiceProvider.GetRequiredService<BalanceForecastService>();
             var normalizedEmail = options.Value.AuthorizedEmail.Trim().ToUpperInvariant();
             var user = await db.Users.AsNoTracking()
                 .SingleOrDefaultAsync(x => x.NormalizedEmail == normalizedEmail, cancellationToken);
@@ -40,13 +40,9 @@ public sealed class ApplicationStartupNotificationService(
                 return;
             }
 
-            var analysis = await dashboard.GetBalanceForecastAsync(householdId, cancellationToken);
-            var current = analysis.Months[0];
-            await notifications.NotifyForecastAsync(new BalanceForecastNotification(
-                user.Email, BalanceForecastNotificationReason.ApplicationStarted,
-                current.Salary, current.ExtraIncome, current.FixedExpenses,
-                current.CardInvoices + current.EstimatedCardInvoices,
-                current.Net, null, DateTime.UtcNow), cancellationToken);
+            var current = await forecast.CalculateAsync(householdId, cancellationToken);
+            await notifications.NotifyForecastAsync(BalanceForecastNotification.From(
+                user.Email, BalanceForecastNotificationReason.ApplicationStarted, current, null), cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception exception)

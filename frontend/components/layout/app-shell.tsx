@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import * as Dialog from "@radix-ui/react-dialog"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { BarChart3, CalendarClock, CreditCard, LayoutDashboard, LogOut, Menu, ReceiptText, Settings, Tags, UsersRound, WalletCards, X } from "lucide-react"
+import { CalendarClock, CreditCard, LayoutDashboard, LogOut, Menu, Settings, Tags, WalletCards, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { BrandLogo } from "@/components/brand/brand-logo"
@@ -19,13 +19,10 @@ import { useHouseholdSelection } from "@/providers/household-provider"
 
 const navigation = [
   { label: "Visão geral", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Contas", href: "/contas", icon: WalletCards },
-  { label: "Lançamentos", href: "/transacoes", icon: ReceiptText },
-  { label: "Categorias", href: "/categorias", icon: Tags },
-  { label: "Família", href: "/familia", icon: UsersRound },
   { label: "Previsões", href: "/previsoes", icon: CalendarClock },
   { label: "Cartões", href: "/cartoes", icon: CreditCard },
-  { label: "Relatórios", href: "/relatorios", icon: BarChart3 },
+  { label: "Contas", href: "/contas", icon: WalletCards },
+  { label: "Categorias", href: "/categorias", icon: Tags },
 ] as const
 
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
@@ -35,7 +32,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
     <nav aria-label="Navegação principal" className="space-y-1">
       {items.map((item) => {
         const Icon = item.icon
-        const active = pathname === item.href
+        const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
         return <Link key={item.label} href={item.href} onClick={onNavigate} aria-current={active ? "page" : undefined} className={cn("flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors", active ? "bg-sidebar-primary text-sidebar-primary-foreground" : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground")}><Icon />{item.label}</Link>
       })}
     </nav>

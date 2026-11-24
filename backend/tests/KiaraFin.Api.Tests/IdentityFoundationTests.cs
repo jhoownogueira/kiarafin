@@ -1,10 +1,7 @@
-using KiaraFin.Api.Common.Exceptions;
 using KiaraFin.Api.Common.Security;
 using KiaraFin.Api.Data;
 using KiaraFin.Api.Features.Auth;
-using KiaraFin.Api.Features.Households;
 using KiaraFin.Api.Features.Identity;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -37,45 +34,6 @@ public sealed class IdentityFoundationTests
     public void Legacy_invitation_tokens_are_normalized_after_redirects(string transported, string expected)
     {
         Assert.Equal(expected, OpaqueToken.NormalizeTransportEncoding(transported));
-    }
-
-    [Fact]
-    public void Invitation_expires_and_can_only_be_accepted_once()
-    {
-        var invitation = new HouseholdInvitation(
-            Guid.NewGuid(), Guid.NewGuid(), "hash", DateTime.UtcNow.AddMinutes(5), null);
-
-        Assert.True(invitation.IsActive(DateTime.UtcNow));
-        invitation.Accept(Guid.NewGuid(), DateTime.UtcNow);
-        Assert.False(invitation.IsActive(DateTime.UtcNow));
-    }
-
-    [Fact]
-    public async Task Members_from_another_household_are_not_visible()
-    {
-        await using var db = NewContext();
-        var first = NewUser("first@example.test");
-        var second = NewUser("second@example.test");
-        var firstHousehold = new Household("Primeiro", first.Id);
-        var secondHousehold = new Household("Segundo", second.Id);
-        db.AddRange(first, second, firstHousehold, secondHousehold);
-        db.HouseholdMemberships.AddRange(
-            new HouseholdMembership(firstHousehold.Id, first.Id, HouseholdRole.Owner),
-            new HouseholdMembership(secondHousehold.Id, second.Id, HouseholdRole.Owner));
-        await db.SaveChangesAsync();
-        var service = new HouseholdService(db, new StubCurrentUser(first.Id), TokenService());
-
-        await Assert.ThrowsAsync<NotFoundException>(() =>
-            service.GetMembersAsync(secondHousehold.Id, CancellationToken.None));
-    }
-
-    [Fact]
-    public void Household_endpoints_require_authentication()
-    {
-        var authorization = typeof(HouseholdsController)
-            .GetCustomAttributes(typeof(AuthorizeAttribute), true);
-
-        Assert.Single(authorization);
     }
 
     [Fact]

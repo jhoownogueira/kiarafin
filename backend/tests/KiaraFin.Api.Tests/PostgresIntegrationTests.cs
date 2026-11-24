@@ -30,7 +30,7 @@ public sealed class PostgresIntegrationTests
             select numeric_precision, numeric_scale
             from information_schema.columns
             where table_schema = 'public'
-              and table_name = 'financial_transactions'
+              and table_name = 'card_transactions'
               and column_name = 'Amount'
             """;
         await using var reader = await command.ExecuteReaderAsync();

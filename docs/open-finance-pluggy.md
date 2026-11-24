@@ -49,42 +49,21 @@ o consentimento, percorre todas as páginas de contas e transações e prepara o
 relacionamentos. Resposta inconsistente, paginação incompleta, Item divergente,
 consentimento vencido ou conjunto de contas vazio impedem a operação.
 
-Depois da confirmação, a exclusão dos dados financeiros do proprietário e a
-gravação dos registros importados acontecem na mesma transação PostgreSQL. Uma
-falha provoca rollback. Não há exportação, snapshot ou backup preventivo nesse
-fluxo. Usuários, autenticação, configurações gerais, categorias globais e dados
-financeiros de outros usuários ficam fora do escopo.
-
-Após o sucesso, a integração registra que a importação inicial terminou. As
-sincronizações seguintes são incrementais e não repetem a exclusão ampla nem a
-confirmação destrutiva.
+Depois da confirmação, os dados do Item são gravados em uma única transação
+PostgreSQL. Uma falha provoca rollback. Após o sucesso, a integração registra
+que a importação inicial terminou e passa a sincronizar automaticamente.
 
 ## Sincronização e idempotência
 
-As contas e transações preservam os identificadores externos. Constraints no
-banco impedem que o mesmo identificador do mesmo provedor e proprietário seja
-inserido mais de uma vez. Uma nova leitura atualiza registros alterados, trata
-exclusões confirmadas na origem e preserva metadados locais permitidos, como
-categoria personalizada e observações.
+As contas, cartões, faturas e lançamentos preservam os identificadores
+externos, com constraints únicas no banco.
 
-A normalização considera tipo de conta, tipo/status da transação e os dados
-efetivamente retornados pela instituição. Um sinal negativo isolado não é
-suficiente para classificar despesa. Pagamentos de fatura não viram nova despesa
-de consumo, e estornos ou cancelamentos não permanecem como consumo normal. A
-integração não persiste parcelas, faturas, datas ou descrições ausentes na API.
-Quando a instituição informa a posição e a quantidade total de um parcelamento,
-a tela projeta as parcelas restantes nas faturas futuras como valores
-provisórios. A projeção é substituída pelo lançamento oficial assim que ele é
-sincronizado, sem duplicar o valor.
-Contas `CREDIT` viram cartões; limites, saldos, fechamento e vencimento são
-anuláveis. Faturas só são criadas a partir do recurso `/bills`, e cada compra é
-vinculada a uma fatura apenas quando a Pluggy fornece o `billId` correspondente.
-Compras pendentes de cartão ainda sem `billId` aparecem separadamente como
-**fatura em formação**, com total e vencimento explicitamente provisórios. Essa
-projeção considera apenas lançamentos associados ao cartão; débitos de conta
-permanecem exclusivamente no fluxo de lançamentos e nunca entram na fatura.
-Estornos são preservados como redução de despesa, sem serem apresentados como
-receita.
+Cada sincronização espelha o Item: registros novos são inseridos, alterados
+são atualizados e os que sumiram da origem são removidos. As regras de
+classificação dos lançamentos de cartão e de montagem das faturas estão em
+[financial-rules.md](financial-rules.md).
+Contas `CREDIT` viram cartões; contas `BANK` viram contas com o saldo da
+instituição. Faturas fechadas vêm de `/bills`.
 
 Valores usam tipos decimais; timestamps são armazenados como instantes UTC e a
 interface apresenta datas no fuso do usuário. Reexecutar a sincronização com o
@@ -143,10 +122,9 @@ o KiaraFin mostra a data real e orienta a renovação pelo Dashboard Pluggy. Ap�
 o vencimento, a sincronização é suspensa e os dados existentes são preservados.
 Depois da renovação, atualize `PLUGGY_ITEM_ID` caso o Item tenha mudado. O
 backend valida o novo Item antes de substituir a associação e mantém os dados
-anteriores se a validação falhar. A troca automática só prossegue quando o novo
-Item preserva os identificadores das contas já vinculadas; identificadores
-diferentes interrompem a sincronização para evitar duplicação silenciosa e
-exigem reconciliação administrativa.
+anteriores se a validação falhar. Como a sincronização é espelhada, se o novo
+Item trouxer contas com identificadores diferentes, as antigas são removidas e
+as novas são importadas.
 
 Erros temporários, timeouts e respostas vazias inesperadas não significam que
 as transações foram removidas. Nesses casos, a última versão sincronizada é
@@ -157,13 +135,7 @@ mantida, o erro sanitizado é registrado e uma tentativa posterior pode ocorrer.
 A representação de cartões e faturas depende dos campos disponibilizados pela
 instituição e pelo plano Pluggy. Limite, saldo utilizado, fechamento,
 vencimento, parcelas e faturas só aparecem quando a origem fornece informação
-confiável. A categorização do KiaraFin funciona sem depender de enriquecimento
-premium: regras locais e categorias conhecidas têm prioridade, com `Outros`
-como fallback. Na primeira importação, a categorização reaproveita categorias
-de identificadores de provedor já conhecidos, descrições anteriormente
-categorizadas e o nome de categoria retornado pela Pluggy; sem correspondência,
-usa `Outros`. Alterações locais de categoria e observações não são sobrescritas
-nas sincronizações seguintes.
+confiável. A categoria exibida em cada lançamento é a retornada pela Pluggy.
 
 A próxima atualização bancária não é exibida como horário exato quando a
 Pluggy não fornece esse dado. O horário mostrado para a próxima verificação é o

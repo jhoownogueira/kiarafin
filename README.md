@@ -1,10 +1,9 @@
 # KiaraFin
 
-KiaraFin é um projeto pessoal e open source de gestão financeira individual e
-familiar. Ele reúne contas, lançamentos, cartões, previsões e relatórios em um
-núcleo financeiro compartilhável (`Household`). A integração opcional com a
-Pluggy importa dados via Open Finance, recebe atualizações por webhook e pode
-enviar resumos privados pelo Telegram.
+KiaraFin é um projeto pessoal e open source de gestão financeira individual.
+Ele reúne contas, cartões e previsões de saldo. A integração com a Pluggy espelha
+os dados via Open Finance, recebe atualizações por webhook e pode enviar resumos
+privados pelo Telegram.
 
 O código pode ser estudado, clonado e implantado em infraestrutura própria nos
 termos da [licença MIT](LICENSE). Cada instalação deve usar suas próprias
@@ -13,9 +12,8 @@ credenciais, consentimentos e contas nos serviços externos.
 Instância pessoal: [kiarafin.jhonata.dev](https://kiarafin.jhonata.dev/). O
 cadastro público permanece fechado nessa implantação.
 
-> Status: MVP funcional. Autenticação, núcleo familiar, contas, categorias,
-> lançamentos, previsões, parcelas, cartões, dashboard e relatórios usam a API
-> e o PostgreSQL reais. Consulte o roadmap para limitações e evoluções planejadas.
+> Status: uso pessoal. Módulos: Visão geral (previsão de saldo), Previsões,
+> Cartões, Contas, Categorias e Open Finance, com notificações pelo Telegram.
 
 O cadastro de novos usuários fica desativado por padrão. Em uma instalação nova,
 o operador pode habilitá-lo temporariamente com `REGISTRATION_ENABLED=true`,
@@ -158,9 +156,9 @@ npm run lint --prefix frontend
 npm run build --prefix frontend
 ```
 
-Os testes xUnit cobrem autenticação e isolamento, DDL PostgreSQL, saldo,
-transferências, recorrências, ciclos de fatura, parcelas, pagamento de fatura e
-projeção financeira.
+Os testes xUnit cobrem autenticação, DDL PostgreSQL, leitura da Pluggy
+(datas, moeda estrangeira, faturas), classificação de lançamentos de cartão,
+montagem das faturas, sincronização espelhada e previsão de saldo.
 
 O teste de integração PostgreSQL é ativado ao definir
 `KIARAFIN_TEST_CONNECTION`. Por segurança, ele recusa bancos cujo nome não
@@ -195,15 +193,12 @@ repositório não contém banco, dados financeiros nem credenciais de produção
 Em desenvolvimento, a especificação OpenAPI exposta pela API é a fonte de verdade.
 
 - `/api/auth`: cadastro configurável, login, refresh, logout e usuário autenticado.
-- `/api/households`: núcleo familiar, membros e convites.
-- `/api/households/{householdId}/accounts`: contas, saldos e histórico.
+- `/api/households/{householdId}/accounts`: contas, saldos e movimentações.
 - `/api/households/{householdId}/categories`: categorias padrão e personalizadas.
-- `/api/households/{householdId}/transactions`: receitas, despesas, cancelamentos e transferências.
 - `/api/households/{householdId}/forecasts`: salários, rendas extras e contas fixas previstas.
-- `/api/households/{householdId}/installments`: planos e parcelas futuras.
-- `/api/households/{householdId}/credit-cards`: cartões, compras, faturas e pagamento integral.
-- `/api/households/{householdId}/dashboard`: indicadores, gráficos e vencimentos.
-- `/api/households/{householdId}/reports`: agregações e filtros financeiros.
+- `/api/households/{householdId}/forecasts/balance`: previsão de saldo do mês atual.
+- `/api/households/{householdId}/cards`: cartões, fatura atual, parcelas futuras e faturas fechadas.
+- `/api/integrations/pluggy`: status, ativação, sincronização e webhook do Open Finance.
 
 Todos os endpoints financeiros deverão validar o `Household` do usuário
 autenticado; um identificador enviado pelo cliente nunca será suficiente para

@@ -1,6 +1,5 @@
 using KiaraFin.Api.Common.Exceptions;
 using KiaraFin.Api.Data;
-using KiaraFin.Api.Features.Dashboard;
 using KiaraFin.Api.Features.Households;
 using KiaraFin.Api.Features.Notifications;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +9,7 @@ namespace KiaraFin.Api.Features.Forecasts;
 public sealed class ForecastService(
     AppDbContext dbContext,
     HouseholdAccessService access,
-    DashboardService? dashboard = null,
+    BalanceForecastService? forecast = null,
     IAccountNotificationService? notifications = null,
     ILogger<ForecastService>? logger = null)
 {
@@ -96,28 +95,23 @@ public sealed class ForecastService(
     private async Task<decimal?> GetCurrentMonthResultAsync(
         Guid householdId, CancellationToken cancellationToken)
     {
-        if (dashboard is null || notifications is null) return null;
-        var analysis = await dashboard.GetBalanceForecastAsync(householdId, cancellationToken);
-        return analysis.Months.FirstOrDefault()?.Net;
+        if (forecast is null || notifications is null) return null;
+        return (await forecast.CalculateAsync(householdId, cancellationToken)).Net;
     }
 
     private async Task NotifyForecastChangeAsync(
         Guid householdId, decimal? previousResult, CancellationToken cancellationToken)
     {
-        if (dashboard is null || notifications is null) return;
+        if (forecast is null || notifications is null) return;
         try
         {
             var email = await dbContext.Users.AsNoTracking()
                 .Where(x => x.Id == access.UserId)
                 .Select(x => x.Email)
                 .SingleAsync(cancellationToken);
-            var analysis = await dashboard.GetBalanceForecastAsync(householdId, cancellationToken);
-            var current = analysis.Months[0];
-            await notifications.NotifyForecastAsync(new BalanceForecastNotification(
-                email, BalanceForecastNotificationReason.ForecastEdited,
-                current.Salary, current.ExtraIncome, current.FixedExpenses,
-                current.CardInvoices + current.EstimatedCardInvoices,
-                current.Net, previousResult, DateTime.UtcNow), cancellationToken);
+            var current = await forecast.CalculateAsync(householdId, cancellationToken);
+            await notifications.NotifyForecastAsync(BalanceForecastNotification.From(
+                email, BalanceForecastNotificationReason.ForecastEdited, current, previousResult), cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

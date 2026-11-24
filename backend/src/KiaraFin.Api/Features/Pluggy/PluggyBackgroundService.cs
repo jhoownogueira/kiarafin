@@ -31,7 +31,7 @@ public sealed class PluggyBackgroundService(IServiceScopeFactory scopes, IOption
             await db.SaveChangesAsync(ct);
             var job = await ClaimNextJobAsync(db, now, ct);
             if (job is null) return;
-            try { await scope.ServiceProvider.GetRequiredService<PluggyIntegrationService>().SynchronizeAsync(job.IntegrationId, job.Trigger, ct, job.Payload); job.Complete(DateTime.UtcNow); }
+            try { await scope.ServiceProvider.GetRequiredService<PluggyIntegrationService>().SynchronizeAsync(job.IntegrationId, job.Trigger, ct); job.Complete(DateTime.UtcNow); }
             catch (Exception ex)
             {
                 db.ChangeTracker.Clear();

@@ -21,15 +21,4 @@ public sealed class HouseholdAccessService(AppDbContext dbContext, ICurrentUser 
                 cancellationToken)
             ?? throw new NotFoundException("Núcleo financeiro não encontrado.");
     }
-
-    public async Task RequireMemberUserAsync(
-        Guid householdId,
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        if (!await dbContext.HouseholdMemberships.AsNoTracking().AnyAsync(
-                x => x.HouseholdId == householdId && x.UserId == userId,
-                cancellationToken))
-            throw new AppValidationException("O responsável deve pertencer ao núcleo financeiro.");
-    }
 }
