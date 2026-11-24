@@ -354,3 +354,44 @@ public sealed class PluggySyncAndForecastTests
         public Guid UserId { get; } = userId;
     }
 }
+
+public sealed class CardDescriptionRuleTests
+{
+    [Fact]
+    public async Task Rule_applies_alias_and_category_to_every_installment_and_is_removed_when_empty()
+    {
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase($"rules-{Guid.NewGuid():N}").Options);
+        var user = new User("Dono", "dono@example.test", "DONO@EXAMPLE.TEST", "hash");
+        var household = new Household("Casa", user.Id);
+        var games = new KiaraFin.Api.Features.Finance.Category(household.Id, "Jogos",
+            KiaraFin.Api.Features.Finance.CategoryType.Expense, "#123456", "gamepad");
+        var card = new CreditCard(household.Id, "card-1");
+        card.Apply("Cartão", "Banco", null, null, null, null, 0, null, null, null, true, DateTime.UtcNow);
+        db.AddRange(user, household, new HouseholdMembership(household.Id, user.Id, HouseholdRole.Owner), games, card);
+        var today = BusinessDate.Today();
+        foreach (var (id, number) in new[] { ("t1", 1), ("t2", 2) })
+        {
+            var tx = new CardTransaction(card.Id, id);
+            tx.Apply($"LEVEL UP INTERACT {number}/4", 50, CardTransactionKind.Purchase, today, today, true, null,
+                number, 4, null, null, null, DateTime.UtcNow);
+            db.Add(tx);
+        }
+        await db.SaveChangesAsync();
+        var service = new CardService(db, new HouseholdAccessService(db, new StubCurrentUser(user.Id)));
+
+        await service.SaveRuleAsync(household.Id, new SaveDescriptionRuleRequest("level up interact 1/4", " HyperGames Site ", games.Id), default);
+        var detail = await service.GetAsync(household.Id, card.Id, default);
+        var all = detail.CurrentInvoice.Items!.Concat(detail.Upcoming).ToList();
+        Assert.All(all, x => Assert.Equal("HyperGames Site", x.Alias));
+        Assert.All(all, x => Assert.Equal("Jogos", x.UserCategory?.Name));
+
+        await service.SaveRuleAsync(household.Id, new SaveDescriptionRuleRequest("LEVEL UP INTERACT", "", null), default);
+        Assert.Empty(await db.CardDescriptionRules.ToListAsync());
+    }
+
+    private sealed class StubCurrentUser(Guid userId) : ICurrentUser
+    {
+        public Guid UserId { get; } = userId;
+    }
+}

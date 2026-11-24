@@ -153,3 +153,35 @@ public sealed class CardTransaction
         return changed;
     }
 }
+
+/// <summary>
+/// Apelido e categoria do usuário para uma descrição de lançamento de cartão. Vale para todos os
+/// lançamentos cuja descrição normalizada (maiúsculas, sem sufixo de parcela) seja igual a <see cref="Key"/>.
+/// </summary>
+public sealed class CardDescriptionRule
+{
+    private CardDescriptionRule() { }
+
+    public CardDescriptionRule(Guid householdId, string key)
+    {
+        Id = Guid.NewGuid();
+        HouseholdId = householdId;
+        Key = key;
+        CreatedAtUtc = DateTime.UtcNow;
+    }
+
+    public Guid Id { get; private set; }
+    public Guid HouseholdId { get; private set; }
+    public string Key { get; private set; } = null!;
+    public string? Alias { get; private set; }
+    public Guid? CategoryId { get; private set; }
+    public DateTime CreatedAtUtc { get; private set; }
+    public DateTime? UpdatedAtUtc { get; private set; }
+
+    public void Apply(string? alias, Guid? categoryId, DateTime utcNow)
+    {
+        Alias = string.IsNullOrWhiteSpace(alias) ? null : alias.Trim();
+        CategoryId = categoryId;
+        UpdatedAtUtc = utcNow;
+    }
+}

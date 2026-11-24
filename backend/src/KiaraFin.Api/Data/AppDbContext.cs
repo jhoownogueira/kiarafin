@@ -19,6 +19,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<CreditCard> CreditCards => Set<CreditCard>();
     public DbSet<CardBill> CardBills => Set<CardBill>();
     public DbSet<CardTransaction> CardTransactions => Set<CardTransaction>();
+    public DbSet<CardDescriptionRule> CardDescriptionRules => Set<CardDescriptionRule>();
     public DbSet<FinancialIntegration> FinancialIntegrations => Set<FinancialIntegration>();
     public DbSet<FinancialIntegrationSync> FinancialIntegrationSyncs => Set<FinancialIntegrationSync>();
     public DbSet<PluggySyncJob> PluggySyncJobs => Set<PluggySyncJob>();

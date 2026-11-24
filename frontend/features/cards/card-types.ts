@@ -17,6 +17,8 @@ export type CardItem = {
   currencyCode: string | null
   originalAmount: number | null
   projected: boolean
+  alias: string | null
+  userCategory: { id: string; name: string; color: string } | null
 }
 
 export type OpenInvoice = { total: number; closingDate: string | null; dueDate: string | null; itemCount: number; items: CardItem[] | null }
@@ -68,6 +70,9 @@ export const cardKeys = {
 export const cardService = {
   async list(householdId: string) { return (await api.get<CardSummary[]>(root(householdId))).data },
   async get(householdId: string, cardId: string) { return (await api.get<CardDetail>(`${root(householdId)}/${cardId}`)).data },
+  async saveRule(householdId: string, input: { description: string; alias: string | null; categoryId: string | null }) {
+    return (await api.put(`${root(householdId)}/description-rules`, input)).data
+  },
 }
 
 export const kindLabel: Record<CardTransactionKind, string> = { Purchase: "Compra", Credit: "Estorno/crédito", Payment: "Pagamento" }

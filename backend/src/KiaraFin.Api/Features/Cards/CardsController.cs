@@ -16,4 +16,9 @@ public sealed class CardsController(CardService service) : ControllerBase
     public async Task<ActionResult<CardDetailResponse>> Get(
         Guid householdId, Guid cardId, CancellationToken cancellationToken) =>
         Ok(await service.GetAsync(householdId, cardId, cancellationToken));
+
+    [HttpPut("description-rules")]
+    public async Task<ActionResult<DescriptionRuleResponse>> SaveDescriptionRule(
+        Guid householdId, SaveDescriptionRuleRequest request, CancellationToken cancellationToken) =>
+        Ok(await service.SaveRuleAsync(householdId, request, cancellationToken));
 }

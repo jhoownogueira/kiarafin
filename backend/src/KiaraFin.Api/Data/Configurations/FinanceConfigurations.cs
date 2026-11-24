@@ -150,3 +150,19 @@ public sealed class CardTransactionConfiguration : IEntityTypeConfiguration<Card
         builder.HasOne<CreditCard>().WithMany().HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+public sealed class CardDescriptionRuleConfiguration : IEntityTypeConfiguration<CardDescriptionRule>
+{
+    public void Configure(EntityTypeBuilder<CardDescriptionRule> builder)
+    {
+        builder.ToTable("card_description_rules");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Key).HasMaxLength(300).IsRequired();
+        builder.Property(x => x.Alias).HasMaxLength(120);
+        builder.Property(x => x.CreatedAtUtc).IsUtcInstant();
+        builder.Property(x => x.UpdatedAtUtc).IsUtcInstant();
+        builder.HasIndex(x => new { x.HouseholdId, x.Key }).IsUnique();
+        builder.HasOne<Household>().WithMany().HasForeignKey(x => x.HouseholdId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Category>().WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
+    }
+}
