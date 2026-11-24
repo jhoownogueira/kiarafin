@@ -123,6 +123,27 @@ public sealed class CardInvoiceCalculatorTests
     }
 
     [Fact]
+    public void Projection_is_replaced_without_duplication_when_the_real_installment_arrives()
+    {
+        var card = Card();
+        var nov = Bill(card, "nov", new DateOnly(2026, 11, 12), new DateOnly(2026, 11, 5), 1000);
+        var purchase = new DateOnly(2026, 9, 11);
+        var second = Tx("AMAZONMKTPLC*CGCENTERG", 79.80m, CardTransactionKind.Purchase, new DateOnly(2026, 10, 5), "nov", (2, 5), purchase);
+
+        var before = CardInvoiceCalculator.Calculate(card, [nov], [second], Today);
+        Assert.Equal(79.80m, before.Current.Total);
+        Assert.True(before.Current.Lines.Single().Projected);
+        Assert.Equal(2, before.Upcoming.Count);
+
+        // O Open Finance publica a 3/5 real na fatura aberta.
+        var third = Tx("AMAZONMKTPLC*CGCENTERG", 79.80m, CardTransactionKind.Purchase, new DateOnly(2026, 11, 5), null, (3, 5), purchase);
+        var after = CardInvoiceCalculator.Calculate(card, [nov], [second, third], Today);
+        Assert.Equal(79.80m, after.Current.Total);
+        Assert.False(after.Current.Lines.Single().Projected);
+        Assert.Equal([4, 5], after.Upcoming.Select(x => x.Transaction.InstallmentNumber!.Value));
+    }
+
+    [Fact]
     public void Payments_listed_in_a_bill_settle_the_previous_bill()
     {
         var card = Card();
