@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFinanceContext } from "@/features/finance/selectors"
+import { CategoryBreakdown, type CategoryInvoiceGroup } from "@/features/forecasts/category-breakdown"
 import type { ForecastEntryType } from "@/features/forecasts/forecast-types"
 import { api } from "@/lib/api/client"
 import { getApiErrorMessage } from "@/lib/api/errors"
@@ -22,6 +23,7 @@ type BalanceForecast = {
   net: number
   cards: { cardId: string; name: string; currentInvoice: number; currentInvoiceDueDate: string | null; outstandingClosedInvoices: number; total: number }[]
   entries: { id: string; name: string; type: ForecastEntryType; amount: number; expectedDay: number }[]
+  currentInvoiceByCategory: CategoryInvoiceGroup[]
 }
 
 const typeLabels: Record<ForecastEntryType, string> = { Salary: "Salário", ExtraIncome: "Renda extra", FixedExpense: "Conta fixa" }
@@ -48,6 +50,8 @@ function ForecastView({ data }: { data: BalanceForecast }) {
     </div>
 
     {data.entries.length === 0 && <Card className="mt-6 border-dashed"><CardContent className="flex min-h-40 flex-col items-center justify-center text-center"><Sparkles className="size-8 text-brand-green" /><p className="mt-3 font-semibold">Cadastre suas previsões</p><p className="mt-1 max-w-lg text-sm text-muted-foreground">Salário, rendas extras e contas fixas entram neste cálculo.</p><Button className="mt-4" asChild><Link href="/previsoes"><Plus />Cadastrar previsões</Link></Button></CardContent></Card>}
+
+    <CategoryBreakdown groups={data.currentInvoiceByCategory} />
 
     <div className="mt-6 grid gap-4 lg:grid-cols-[.9fr_1.1fr]">
       <Card><CardContent className="p-5">
