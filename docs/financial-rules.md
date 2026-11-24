@@ -57,6 +57,14 @@ Montagem das faturas:
   quando esses pagamentos, ou os lançamentos de pagamento após o fechamento,
   cobrem o total (tolerância de 1%).
 
+## Apelidos e categorias de lançamentos
+
+Na fatura, cada lançamento pode receber um apelido e uma categoria do usuário. A
+regra é salva pela descrição normalizada (maiúsculas, sem sufixo de parcela e
+sem espaços repetidos) e vale para todos os lançamentos de cartão com essa
+descrição, inclusive os próximos e as parcelas projetadas. Apelido e categoria
+vazios removem a regra. A regra não altera valores nem o total da fatura.
+
 ## Previsão de saldo
 
 A Visão geral mostra o mês atual:

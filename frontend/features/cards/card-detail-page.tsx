@@ -1,13 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { ArrowLeft, ChevronDown, Globe2 } from "lucide-react"
+import { createContext, useContext, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { ArrowLeft, ChevronDown, Globe2, LoaderCircle, Pencil } from "lucide-react"
+import { toast } from "sonner"
+import { FormDialog } from "@/components/shared/form-dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cardKeys, cardService, kindLabel, type CardItem, type ClosedInvoice } from "@/features/cards/card-types"
+import { categoryService } from "@/features/finance/services"
 import { useFinanceContext } from "@/features/finance/selectors"
 import { getApiErrorMessage } from "@/lib/api/errors"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/formatters"
@@ -15,9 +19,13 @@ import { cn } from "@/lib/utils"
 
 type Tab = "current" | "upcoming" | "closed" | "payments"
 
+/** Abre o diálogo de apelido/categoria a partir de qualquer lista de lançamentos. */
+const EditItemContext = createContext<(item: CardItem) => void>(() => {})
+
 export function CardDetailPage({ cardId }: { cardId: string }) {
   const { householdId } = useFinanceContext()
   const [tab, setTab] = useState<Tab>("current")
+  const [editing, setEditing] = useState<CardItem | null>(null)
   const query = useQuery({ queryKey: cardKeys.detail(householdId, cardId), queryFn: () => cardService.get(householdId, cardId), enabled: !!householdId })
 
   if (query.isPending) return <Skeleton className="h-96" />
@@ -30,7 +38,8 @@ export function CardDetailPage({ cardId }: { cardId: string }) {
     { id: "payments", label: "Pagamentos", count: payments.length },
   ]
 
-  return <div>
+  return <EditItemContext.Provider value={setEditing}><div>
+    <RuleDialog key={editing?.id ?? "none"} householdId={householdId} item={editing} onClose={() => setEditing(null)} />
     <Button variant="ghost" size="sm" asChild><Link href="/cartoes"><ArrowLeft />Cartões</Link></Button>
     <div className="mt-3 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
       <div><p className="text-sm font-semibold text-brand-green">{card.institution}</p><h1 className="mt-1 font-heading text-3xl font-semibold">{card.name}</h1><p className="mt-2 text-sm text-muted-foreground">{[card.brand, card.number ? `•••• ${card.number.slice(-4)}` : null, card.updatedAtUtc ? `atualizado em ${formatDateTime(card.updatedAtUtc)}` : null].filter(Boolean).join(" · ")}</p></div>
@@ -53,7 +62,36 @@ export function CardDetailPage({ cardId }: { cardId: string }) {
       {tab === "closed" && (closedInvoices.length ? <div className="space-y-3">{closedInvoices.map((invoice) => <ClosedInvoiceCard key={invoice.id} invoice={invoice} />)}</div> : <Empty text="O banco não retornou faturas fechadas." />)}
       {tab === "payments" && <ItemsCard items={payments} empty="Nenhum pagamento encontrado." showAmount />}
     </div>
-  </div>
+  </div></EditItemContext.Provider>
+}
+
+function RuleDialog({ householdId, item, onClose }: { householdId: string; item: CardItem | null; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [alias, setAlias] = useState(item?.alias ?? "")
+  const [categoryId, setCategoryId] = useState(item?.userCategory?.id ?? "")
+  const categories = useQuery({ queryKey: ["categories", householdId, "options"], queryFn: () => categoryService.list(householdId, 1, undefined, true, 100), enabled: !!householdId && !!item })
+  const save = useMutation({
+    mutationFn: (input: { alias: string | null; categoryId: string | null }) => cardService.saveRule(householdId, { description: item!.description, ...input }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["cards", householdId] }); toast.success("Lançamento atualizado."); onClose() },
+    onError: (error) => toast.error(getApiErrorMessage(error)),
+  })
+  const options = categories.data?.items ?? []
+  return <FormDialog open={!!item} onOpenChange={(open) => { if (!open) onClose() }} title="Editar lançamento" description="Vale para todos os lançamentos com esta descrição, inclusive os próximos.">
+    <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); save.mutate({ alias: alias.trim() || null, categoryId: categoryId || null }) }}>
+      <div className="rounded-xl bg-muted/50 p-3 text-sm"><p className="text-xs text-muted-foreground">Descrição do cartão</p><p className="mt-0.5 font-medium">{item?.description}</p></div>
+      <label className="block space-y-2 text-sm font-medium"><span>Apelido</span><Input autoFocus maxLength={120} placeholder="Ex.: Maquininha Meu Pai" value={alias} onChange={(event) => setAlias(event.target.value)} /></label>
+      <label className="block space-y-2 text-sm font-medium"><span>Categoria</span>
+        <select className="h-11 w-full rounded-xl border bg-background px-3 text-sm" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+          <option value="">Sem categoria</option>
+          {(["Expense", "Income"] as const).map((type) => { const group = options.filter((x) => x.type === type); return group.length ? <optgroup key={type} label={type === "Expense" ? "Despesas" : "Receitas"}>{group.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup> : null })}
+        </select>
+      </label>
+      <div className="flex justify-between gap-2">
+        <Button type="button" variant="ghost" disabled={save.isPending || (!item?.alias && !item?.userCategory)} onClick={() => save.mutate({ alias: null, categoryId: null })}>Remover</Button>
+        <Button type="submit" disabled={save.isPending}>{save.isPending && <LoaderCircle className="animate-spin" />}Salvar</Button>
+      </div>
+    </form>
+  </FormDialog>
 }
 
 function Metric({ label, value, hint, emphasize = false }: { label: string; value: string; hint?: string; emphasize?: boolean }) {
@@ -86,16 +124,22 @@ function ItemsCard({ items, total, empty, note, showAmount = false }: { items: C
 }
 
 function ItemList({ items, empty, showAmount = false }: { items: CardItem[]; empty: string; showAmount?: boolean }) {
+  const edit = useContext(EditItemContext)
   if (!items.length) return <p className="py-4 text-sm text-muted-foreground">{empty}</p>
   return <div className="divide-y">{items.map((item) => {
     const value = showAmount ? item.amount : item.effect
-    return <div key={item.id} className="flex items-center justify-between gap-3 py-2.5">
+    const category = item.userCategory ? `(${item.userCategory.name})` : item.category
+    return <div key={item.id} className="group flex items-center justify-between gap-3 py-2.5">
       <div className="min-w-0">
         <p className={cn("truncate text-sm font-medium", item.projected && "italic")}>{item.description}{item.totalInstallments && item.totalInstallments > 1 ? <span className="ml-2 text-xs font-normal text-muted-foreground">{item.installmentNumber}/{item.totalInstallments}</span> : null}</p>
-        <p className="text-xs text-muted-foreground">{formatDate(item.date)}{item.purchaseDate && item.purchaseDate !== item.date ? ` · compra ${formatDate(item.purchaseDate)}` : ""}{item.projected ? " · projetada" : item.isPending ? " · pendente" : ""}{item.kind !== "Purchase" ? ` · ${kindLabel[item.kind]}` : ""}{item.category ? ` · ${item.category}` : ""}</p>
+        {item.alias && <p className="truncate text-sm text-brand-green">({item.alias})</p>}
+        <p className="text-xs text-muted-foreground">{formatDate(item.date)}{item.purchaseDate && item.purchaseDate !== item.date ? ` · compra ${formatDate(item.purchaseDate)}` : ""}{item.projected ? " · projetada" : item.isPending ? " · pendente" : ""}{item.kind !== "Purchase" ? ` · ${kindLabel[item.kind]}` : ""}{category ? <> · <span className={item.userCategory ? "font-medium text-foreground/80" : undefined}>{category}</span></> : null}</p>
         {item.currencyCode && item.originalAmount !== null && <p className="flex items-center gap-1 text-xs text-muted-foreground"><Globe2 className="size-3" />{item.originalAmount.toLocaleString("pt-BR", { style: "currency", currency: item.currencyCode })}</p>}
       </div>
-      <p className={cn("shrink-0 text-sm font-semibold", value < 0 && "text-emerald-600 dark:text-emerald-400")}>{formatCurrency(value)}</p>
+      <div className="flex shrink-0 items-center gap-1">
+        <p className={cn("text-sm font-semibold", value < 0 && "text-emerald-600 dark:text-emerald-400")}>{formatCurrency(value)}</p>
+        <Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground" aria-label={`Editar ${item.description}`} onClick={() => edit(item)}><Pencil className="size-3.5" /></Button>
+      </div>
     </div>
   })}</div>
 }

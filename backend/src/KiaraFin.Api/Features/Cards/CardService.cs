@@ -13,8 +13,10 @@ public sealed class CardService(AppDbContext dbContext, HouseholdAccessService a
     public async Task<IReadOnlyList<CardSummaryResponse>> ListAsync(Guid householdId, CancellationToken cancellationToken)
     {
         await access.RequireMembershipAsync(householdId, cancellationToken);
-        var cards = await LoadAsync(householdId, null, BusinessDate.Today(), cancellationToken);
-        return cards.Select(x => Summary(x, BusinessDate.Today())).ToList();
+        var today = BusinessDate.Today();
+        var cards = await LoadAsync(householdId, null, today, cancellationToken);
+        var mapper = await ItemMapperAsync(householdId, cancellationToken);
+        return cards.Select(x => Summary(x, today, mapper)).ToList();
     }
 
     public async Task<CardDetailResponse> GetAsync(Guid householdId, Guid cardId, CancellationToken cancellationToken)
@@ -23,12 +25,45 @@ public sealed class CardService(AppDbContext dbContext, HouseholdAccessService a
         var today = BusinessDate.Today();
         var item = (await LoadAsync(householdId, cardId, today, cancellationToken)).SingleOrDefault()
             ?? throw new NotFoundException("Cartão não encontrado.");
+        var mapper = await ItemMapperAsync(householdId, cancellationToken);
         return new CardDetailResponse(
-            Summary(item, today),
-            Open(item.Invoices.Current, includeItems: true),
-            item.Invoices.Upcoming.Select(Item).ToList(),
-            item.Invoices.Closed.Select(x => Closed(x, includeItems: true)).ToList(),
-            item.Invoices.Payments.OrderByDescending(x => x.Date).Select(x => Item(new InvoiceLine(x, 0))).ToList());
+            Summary(item, today, mapper),
+            Open(item.Invoices.Current, mapper, includeItems: true),
+            item.Invoices.Upcoming.Select(mapper.Map).ToList(),
+            item.Invoices.Closed.Select(x => Closed(x, mapper, includeItems: true)).ToList(),
+            item.Invoices.Payments.OrderByDescending(x => x.Date).Select(x => mapper.Map(new InvoiceLine(x, 0))).ToList());
+    }
+
+    /// <summary>
+    /// Cria, altera ou remove (apelido e categoria vazios) a regra da descrição informada.
+    /// A regra vale para todos os lançamentos de cartão com a mesma descrição normalizada.
+    /// </summary>
+    public async Task<DescriptionRuleResponse> SaveRuleAsync(Guid householdId, SaveDescriptionRuleRequest request,
+        CancellationToken cancellationToken)
+    {
+        await access.RequireMembershipAsync(householdId, cancellationToken);
+        var key = CardInvoiceCalculator.NormalizeDescription(request.Description);
+        if (key.Length == 0) throw new AppValidationException("Informe a descrição do lançamento.");
+        if (request.CategoryId is Guid categoryId &&
+            !await dbContext.Categories.AnyAsync(x => x.Id == categoryId && x.HouseholdId == householdId, cancellationToken))
+            throw new AppValidationException("Categoria não encontrada.");
+
+        var rule = await dbContext.CardDescriptionRules
+            .SingleOrDefaultAsync(x => x.HouseholdId == householdId && x.Key == key, cancellationToken);
+        if (string.IsNullOrWhiteSpace(request.Alias) && request.CategoryId is null)
+        {
+            if (rule is not null) dbContext.CardDescriptionRules.Remove(rule);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return new DescriptionRuleResponse(key, null, null);
+        }
+        if (rule is null)
+        {
+            rule = new CardDescriptionRule(householdId, key);
+            dbContext.CardDescriptionRules.Add(rule);
+        }
+        rule.Apply(request.Alias, request.CategoryId, DateTime.UtcNow);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return new DescriptionRuleResponse(rule.Key, rule.Alias, rule.CategoryId);
     }
 
     /// <summary>Faturas calculadas de todos os cartões ativos (usado pela previsão de saldo).</summary>
@@ -51,31 +86,47 @@ public sealed class CardService(AppDbContext dbContext, HouseholdAccessService a
             CardInvoiceCalculator.Calculate(card, bills[card.Id].ToList(), transactions[card.Id].ToList(), today))).ToList();
     }
 
-    private static CardSummaryResponse Summary(CardWithInvoices item, DateOnly today)
+    private async Task<ItemMapper> ItemMapperAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        var rules = await dbContext.CardDescriptionRules.AsNoTracking()
+            .Where(x => x.HouseholdId == householdId).ToListAsync(cancellationToken);
+        var categories = await dbContext.Categories.AsNoTracking()
+            .Where(x => x.HouseholdId == householdId)
+            .ToDictionaryAsync(x => x.Id, x => new CardItemCategory(x.Id, x.Name, x.Color), cancellationToken);
+        return new ItemMapper(rules.ToDictionary(x => x.Key, StringComparer.Ordinal), categories);
+    }
+
+    private static CardSummaryResponse Summary(CardWithInvoices item, DateOnly today, ItemMapper mapper)
     {
         var card = item.Card;
         var last = item.Invoices.Closed.FirstOrDefault();
         return new CardSummaryResponse(card.Id, card.Name, card.Institution, card.Brand, card.Number,
             card.CreditLimit, card.AvailableLimit, card.ReportedBalance, card.IsActive, card.UpdatedAtUtc,
-            Open(item.Invoices.Current, includeItems: false),
+            Open(item.Invoices.Current, mapper, includeItems: false),
             item.Invoices.OutstandingClosedDueFrom(today),
-            last is null ? null : Closed(last, includeItems: false));
+            last is null ? null : Closed(last, mapper, includeItems: false));
     }
 
-    private static OpenInvoiceResponse Open(OpenInvoice invoice, bool includeItems) => new(
+    private static OpenInvoiceResponse Open(OpenInvoice invoice, ItemMapper mapper, bool includeItems) => new(
         invoice.Total, invoice.ClosingDate, invoice.DueDate, invoice.Lines.Count,
-        includeItems ? invoice.Lines.Select(Item).ToList() : null);
+        includeItems ? invoice.Lines.Select(mapper.Map).ToList() : null);
 
-    private static ClosedInvoiceResponse Closed(ClosedInvoice invoice, bool includeItems) => new(
+    private static ClosedInvoiceResponse Closed(ClosedInvoice invoice, ItemMapper mapper, bool includeItems) => new(
         invoice.Bill.Id, invoice.Bill.DueDate, invoice.Bill.ClosingDate, invoice.Bill.TotalAmount,
         invoice.Bill.MinimumPayment, invoice.PaidAmount, invoice.Outstanding, invoice.IsPaid,
-        invoice.Lines.Sum(x => x.Effect), includeItems ? invoice.Lines.Select(Item).ToList() : null);
+        invoice.Lines.Sum(x => x.Effect), includeItems ? invoice.Lines.Select(mapper.Map).ToList() : null);
 
-    private static CardItemResponse Item(InvoiceLine line)
+    private sealed class ItemMapper(IReadOnlyDictionary<string, CardDescriptionRule> rules,
+        IReadOnlyDictionary<Guid, CardItemCategory> categories)
     {
-        var x = line.Transaction;
-        return new CardItemResponse(x.Id, x.Description, x.Amount, line.Effect, x.Kind, x.Date, x.PurchaseDate,
-            x.IsPending, x.InstallmentNumber, x.TotalInstallments, x.Category, x.CurrencyCode, x.OriginalAmount,
-            line.Projected);
+        public CardItemResponse Map(InvoiceLine line)
+        {
+            var x = line.Transaction;
+            rules.TryGetValue(CardInvoiceCalculator.NormalizeDescription(x.Description), out var rule);
+            var category = rule?.CategoryId is Guid categoryId ? categories.GetValueOrDefault(categoryId) : null;
+            return new CardItemResponse(x.Id, x.Description, x.Amount, line.Effect, x.Kind, x.Date, x.PurchaseDate,
+                x.IsPending, x.InstallmentNumber, x.TotalInstallments, x.Category, x.CurrencyCode, x.OriginalAmount,
+                line.Projected, rule?.Alias, category);
+        }
     }
 }

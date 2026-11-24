@@ -71,6 +71,43 @@ namespace KiaraFin.Api.Data.Migrations
                     b.ToTable("card_bills", (string)null);
                 });
 
+            modelBuilder.Entity("KiaraFin.Api.Features.Cards.CardDescriptionRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Alias")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("HouseholdId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("card_description_rules", (string)null);
+                });
+
             modelBuilder.Entity("KiaraFin.Api.Features.Cards.CardTransaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -735,6 +772,20 @@ namespace KiaraFin.Api.Data.Migrations
                         .WithMany()
                         .HasForeignKey("CardId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("KiaraFin.Api.Features.Cards.CardDescriptionRule", b =>
+                {
+                    b.HasOne("KiaraFin.Api.Features.Finance.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("KiaraFin.Api.Features.Identity.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

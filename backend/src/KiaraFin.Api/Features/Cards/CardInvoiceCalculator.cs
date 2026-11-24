@@ -156,7 +156,7 @@ public static partial class CardInvoiceCalculator
         ? $"{NormalizeDescription(x.Description)}|{purchase:yyyy-MM-dd}|{x.TotalInstallments}"
         : $"{NormalizeDescription(x.Description)}|{x.TotalInstallments}|{x.Amount}";
 
-    internal static string NormalizeDescription(string value)
+    public static string NormalizeDescription(string value)
     {
         var upper = value.Trim().ToUpperInvariant();
         upper = InstallmentSuffix().Replace(upper, " ");
