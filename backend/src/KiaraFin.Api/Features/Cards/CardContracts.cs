@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace KiaraFin.Api.Features.Cards;
 
 public sealed record CardItemResponse(
@@ -21,9 +23,8 @@ public sealed record CardItemResponse(
 public sealed record CardItemCategory(Guid Id, string Name, string Color);
 
 public sealed record SaveDescriptionRuleRequest(
-    [property: System.ComponentModel.DataAnnotations.Required,
-               System.ComponentModel.DataAnnotations.StringLength(300, MinimumLength = 1)] string Description,
-    [property: System.ComponentModel.DataAnnotations.StringLength(120)] string? Alias,
+    [Required, StringLength(300, MinimumLength = 1)] string Description,
+    [StringLength(120)] string? Alias,
     Guid? CategoryId);
 
 public sealed record DescriptionRuleResponse(string Key, string? Alias, Guid? CategoryId);
