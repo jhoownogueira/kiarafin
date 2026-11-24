@@ -24,7 +24,8 @@ public sealed record BalanceForecastResponse(
     decimal CardInvoices,
     decimal Net,
     IReadOnlyList<BalanceForecastCard> Cards,
-    IReadOnlyList<BalanceForecastEntry> Entries);
+    IReadOnlyList<BalanceForecastEntry> Entries,
+    IReadOnlyList<CategoryInvoiceGroup> CurrentInvoiceByCategory);
 
 /// <summary>
 /// Previsão do mês atual:
@@ -44,7 +45,9 @@ public sealed class BalanceForecastService(AppDbContext dbContext, CardService c
             .Select(x => new BalanceForecastEntry(x.Id, x.Name, x.Type, x.Amount, x.ExpectedDay))
             .ToListAsync(cancellationToken);
 
-        var cardItems = (await cards.LoadActiveAsync(householdId, today, cancellationToken)).Select(x =>
+        var activeCards = await cards.LoadActiveAsync(householdId, today, cancellationToken);
+        var byCategory = await cards.CurrentInvoiceByCategoryAsync(householdId, activeCards, cancellationToken);
+        var cardItems = activeCards.Select(x =>
         {
             var current = x.Invoices.Current.Total;
             var outstanding = x.Invoices.OutstandingClosedDueFrom(today);
@@ -59,6 +62,6 @@ public sealed class BalanceForecastService(AppDbContext dbContext, CardService c
         return new BalanceForecastResponse(
             monthStart.ToString("yyyy-MM", CultureInfo.InvariantCulture),
             salary, extra, fixedExpenses, cardTotal, salary + extra - fixedExpenses - cardTotal,
-            cardItems, entries);
+            cardItems, entries, byCategory);
     }
 }

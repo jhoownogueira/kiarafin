@@ -66,6 +66,28 @@ public sealed class CardService(AppDbContext dbContext, HouseholdAccessService a
         return new DescriptionRuleResponse(rule.Key, rule.Alias, rule.CategoryId);
     }
 
+    /// <summary>
+    /// Agrupa os lançamentos das faturas atuais (inclui parcelas projetadas e estornos) pela
+    /// categoria definida nas regras de descrição. Sem regra/categoria = "Sem categoria".
+    /// </summary>
+    public async Task<IReadOnlyList<CategoryInvoiceGroup>> CurrentInvoiceByCategoryAsync(Guid householdId,
+        IReadOnlyList<CardWithInvoices> cards, CancellationToken cancellationToken)
+    {
+        var mapper = await ItemMapperAsync(householdId, cancellationToken);
+        return cards
+            .SelectMany(card => card.Invoices.Current.Lines.Select(line => new CategoryInvoiceItem(card.Card.Name, mapper.Map(line))))
+            .GroupBy(x => x.Item.UserCategory?.Id)
+            .Select(group =>
+            {
+                var category = group.First().Item.UserCategory;
+                return new CategoryInvoiceGroup(category?.Id, category?.Name ?? "Sem categoria", category?.Color,
+                    group.Sum(x => x.Item.Effect),
+                    group.OrderByDescending(x => x.Item.Effect).ThenBy(x => x.Item.Description).ToList());
+            })
+            .OrderByDescending(x => x.Total)
+            .ToList();
+    }
+
     /// <summary>Faturas calculadas de todos os cartões ativos (usado pela previsão de saldo).</summary>
     public Task<IReadOnlyList<CardWithInvoices>> LoadActiveAsync(Guid householdId, DateOnly today,
         CancellationToken cancellationToken) => LoadAsync(householdId, null, today, cancellationToken, activeOnly: true);

@@ -22,6 +22,16 @@ public sealed record CardItemResponse(
 
 public sealed record CardItemCategory(Guid Id, string Name, string Color);
 
+public sealed record CategoryInvoiceItem(string CardName, CardItemResponse Item);
+
+/// <summary>Lançamentos da fatura atual agrupados pela categoria do usuário (null = sem categoria).</summary>
+public sealed record CategoryInvoiceGroup(
+    Guid? CategoryId,
+    string Name,
+    string? Color,
+    decimal Total,
+    IReadOnlyList<CategoryInvoiceItem> Items);
+
 public sealed record SaveDescriptionRuleRequest(
     [Required, StringLength(300, MinimumLength = 1)] string Description,
     [StringLength(120)] string? Alias,

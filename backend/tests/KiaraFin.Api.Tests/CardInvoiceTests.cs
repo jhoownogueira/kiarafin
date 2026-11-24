@@ -386,6 +386,16 @@ public sealed class CardDescriptionRuleTests
         Assert.All(all, x => Assert.Equal("HyperGames Site", x.Alias));
         Assert.All(all, x => Assert.Equal("Jogos", x.UserCategory?.Name));
 
+        var otherTx = new CardTransaction(card.Id, "t3");
+        otherTx.Apply("PADARIA", 20, CardTransactionKind.Purchase, today, today, true, null, null, null, null, null, null, DateTime.UtcNow);
+        db.Add(otherTx);
+        await db.SaveChangesAsync();
+        var forecast = await new BalanceForecastService(db, service).CalculateAsync(household.Id, default);
+        var groups = forecast.CurrentInvoiceByCategory;
+        Assert.Equal(forecast.Cards.Sum(x => x.CurrentInvoice), groups.Sum(x => x.Total));
+        Assert.Equal("Jogos", groups[0].Name);
+        Assert.Contains(groups, x => x.CategoryId is null && x.Name == "Sem categoria" && x.Total == 20);
+
         await service.SaveRuleAsync(household.Id, new SaveDescriptionRuleRequest("LEVEL UP INTERACT", "", null), default);
         Assert.Empty(await db.CardDescriptionRules.ToListAsync());
     }
